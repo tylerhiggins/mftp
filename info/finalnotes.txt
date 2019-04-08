@@ -1,0 +1,13 @@
+FINAL PROJECT NOTES
+
+Server/client mftp server
+
+User: lots of commands.
+
+dont spit out -ls out all at once, use more.  (whatever that means).
+
+Play around with servers on the lab machines.
+
+Demo on the last week of classes. First come first serve, class time and lab time
+
+Know the code in and out!

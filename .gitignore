@@ -1,0 +1,10 @@
+*
+!mftp.c
+!mftpserve.c
+!mftp.h
+!Makefile
+!.gitignore
+!info/
+!info/*
+info/.*
+
