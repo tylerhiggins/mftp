@@ -3,7 +3,7 @@
 /* Specifies which port to listen for for the */
 #define PORT_NUM 49999
 /* Buffer size */
-#define BUF_SIZE 2501
+#define BUF_SIZE 4096
 
 /* Create the socket to communitcate with the client/server
    Argument, the file descriptor for the socket. */

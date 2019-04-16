@@ -36,15 +36,7 @@ void setServAddr(struct sockaddr_in *sAddr, int *lfd) {
 /* Argument - connection file descriptor
    Displays sucessful connection to the server. */
 void toClient(int *cfd, struct sockaddr_in *sAddr) {
-	char buffer[BUF_SIZE];
-	strcpy(buffer, "Connection established\n");
-	if(write(*cfd, buffer, strlen(buffer)) < 0) {
-		perror("could not write to client");
-		if(close(*cfd) < 0) {
-			perror("close error");
-			exit(1);
-		}
-	}
+	
 }
 /* displays the hostname of the client (for the server) */
 void toServer(struct sockaddr_in *cAddr, int *cfd) {
@@ -84,7 +76,6 @@ int main(int argc, char *argv[]) {
 	struct sockaddr_in clientAddr;
 	int listenfd, connectfd;
 	socklen_t length = sizeof(struct sockaddr_in);
-
 
 	createSocket(&listenfd);  // create the listener socket
 	if(debug)

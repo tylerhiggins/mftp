@@ -38,25 +38,10 @@ void connectToServer(char *hname, struct sockaddr_in *sAddr, int *sfd,
 
 	}
 }
-/* Receives data from the server.  Arguments - file descriptor pointer
-   for the socket, the buffer to store the bytes, int pointer to how many bytes read */
-void readFromServer(int *sfd ,char buf[], int *r) {
-	if((*r = read(*sfd, buf, BUF_SIZE)) < 0) {
-		perror("read error");
-		exit(1);
-	}
-}
-/* Writes from stdout to the command line.  Arguments are the buffer and
-   the pointer to the amount of bytes read */
-void writeToClient(char buf[], int *r) {
-	if(write(1, buf, *r) < 0) {
-			perror("write error");
-			exit(1);
-		}
-}
 
 int main(int argc, char *argv[]) {
 	int socketfd = 0;
+	int datafd = 0;
 	int debug = 0;
 	char *server = NULL;
 	struct sockaddr_in servAddr;
@@ -89,17 +74,5 @@ int main(int argc, char *argv[]) {
 	connectToServer(server, &servAddr, &socketfd, hostEntry, &pptr);
 	if(debug)
 		printf("Connected to server\n");
-	// read bytes from the server
-	readFromServer(&socketfd, buffer, &numRead);
-	if(debug)
-		printf("read from server\n");
-	// display data to stdout
-	writeToClient(buffer, &numRead);
-	if(close(socketfd) < 0) {
-		perror("close error");
-		exit(1);
-	}
-	if(debug)
-		printf("exiting.\n");
 	return 0;
 }
