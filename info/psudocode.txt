@@ -1,0 +1,50 @@
+Final Psudocode
+Data connection is the same process as the connection.
+
+1. Client -> Server (Assignment 9) - this time keep the connection alive
+2. Client (Prompt User)
+   Server (Wait) Child
+          (Listen for more connections) Parent
+(client prompt)
+// for a local directory
+> mkdir 
+    fork()
+      exec(mkdir)
+
+> rmkdir
+	- send request to the server
+	- Awknowledge the connection (A - good to go/ E - something went wrong)
+	- Check before making directory (you can do it, directory doesnt exist)
+	- fork()
+	   exec(mkdir)
+
+> rtree
+   - E/Aport (no spaces between the A and portnumber)
+     close(1); dup(cd) - file descripter for your port.
+   - exec(tree)
+   - close everything execpt main conneciton when finished.
+   - show
+   - put
+   test show and put on mobydick.txt
+   buffer[4096]
+
+Server             Client
+start 
+       ---------->  
+       <---------- request(N)
+fork() ----------> A.....
+                   prompt(>)
+fork() <---------- rtree
+accept ----------> Aport
+exit()             connect()
+                   read
+** exit is not killing the connection, just the data fork.
+
+>rcd
+ Send C to the server, Server calls chdir() // make sure directory exists, permissions, etc
+ set a delay for the client
+ Edoesnt exist - if error
+ Achangedirectory to .. // if successful
+ Server if unable to cd, then print it didnt, or if it does print that it was a success.
+
+ 
