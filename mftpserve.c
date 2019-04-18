@@ -37,7 +37,38 @@ void setServAddr(struct sockaddr_in *sAddr, int *lfd) {
 /* Argument - connection file descriptor
    Displays sucessful connection to the server. */
 void toClient(int *cfd, struct sockaddr_in *sAddr) {
-	
+	int nread;
+	int buffer[BUF_SIZE];
+	int i = 0;
+
+	if((write(*cfd, "A", 1) < 0) {
+		perror("E");
+		exit(1);
+	}
+	do {
+		while((nread = read(*cfd, cmd[i], 1)) < 0) {
+			perror("Ecommand");
+			exit(1);
+		}
+		c = cmd[0];
+		switch (c) {
+			case 'C':
+			break;
+			case 'L':
+			break;
+			case 'G':
+			break;
+			case 'P':
+			break;
+			case 'Q':
+			default:
+			break;
+
+
+		}
+	} while(cmd != "Q");
+
+	exit(0);
 }
 /* displays the hostname of the client (for the server) */
 void toServer(struct sockaddr_in *cAddr, int *cfd) {
@@ -52,6 +83,7 @@ void toServer(struct sockaddr_in *cAddr, int *cfd) {
 	hostName = hostEntry->h_name;
 	printf("%s connected.\n", hostName);
 	waitpid(-1, NULL, 0);
+	printf("%s connection closed.\n", hostName);
 	close(*cfd);
 }
 
@@ -89,7 +121,10 @@ int main(int argc, char *argv[]) {
 		printf("listening for connection.\n");
 	while(1) {
 		// accept the connection
-		connectfd = accept(listenfd, (struct sockaddr *) &clientAddr, &length);		
+		if((connectfd = accept(listenfd, (struct sockaddr *) &clientAddr, &length)) < 0){
+			perror("E")
+		}
+
 		if(!fork()) {
 			// child (client) code
 			if(debug)

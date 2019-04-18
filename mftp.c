@@ -38,7 +38,10 @@ void connectToServer(char *hname, struct sockaddr_in *sAddr, int *sfd,
 		exit(1);
 
 	}
+	
 }
+
+void promptUser
 
 int main(int argc, char *argv[]) {
 	int socketfd = 0;
@@ -70,10 +73,13 @@ int main(int argc, char *argv[]) {
 	createSocket(&socketfd);  // attemt to create socket
 	if(debug)
 		printf("Socket created\n");
+
 	memset(&servAddr, 0, sizeof(servAddr));
-	// create the connection to the server
+	// create the control connection to the server
 	connectToServer(server, &servAddr, &socketfd, hostEntry, &pptr);
 	if(debug)
 		printf("Connected to server\n");
+
+	
 	return 0;
 }
