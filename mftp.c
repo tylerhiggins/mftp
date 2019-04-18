@@ -40,20 +40,131 @@ void connectToServer(char *hname, struct sockaddr_in *sAddr, int *sfd,
 	}
 	
 }
-
-void promptUser
+/* Main control for the client program, argument is a pointer
+   of the control socket file descriptor and debug flag. */
+void mainmenu(int *sfd, int debug) {
+	char usercmd[BUF_SIZE];
+	char *cmd, *path;
+	char toServer[BUF_SIZE];
+	char fromServer[BUF_SIZE];
+	int num = 0;
+	int n = 0;
+	int i = 0;
+	do {
+		write(1, "> ", 2);
+		fflush(stdout);
+		fgets(usercmd, BUF_SIZE, stdin);
+		cmd = strtok(usercmd, " ");
+		if(debug) {
+			printf("command entered: %s\n", cmd);
+		}
+		path = strtok(NULL, " ");
+		if(debug) {
+			printf("path entered %s\n", path);
+		}
+		if(strcmp(cmd, "cd") == 0) {
+			// TODO: write code for cd locally
+		}
+		else if(strcmp(cmd, "rcd") == 0) {
+			strcpy(toServer, "C\n");
+			strcat(toServer, path);
+			i = 0;
+			while((num = write(*sfd, &toServer[i], 1)) > 0) {
+				if(num < 0) {
+					perror("E couldn't write to server");
+					break;
+				}
+				i++;
+			}
+			// TODO: write code for cd on the server
+		}
+		else if(strcmp(cmd, "ls") == 0) {
+			// TODO: write code for ls -l locally
+		}
+		else if(strcmp(cmd, "rls") == 0) {
+			strcpy(toServer, "L\n");
+			i = 0;
+			while((num = write(*sfd, &toServer[i], 1)) > 0) {
+				if(num < 0) {
+					perror("E couldn't write to server");
+					break;
+				}
+			}
+			// TODO: finish ls -l on server.
+		}
+		else if(strcmp(cmd, "get") == 0) {
+			strcpy(toServer, "G\n");
+			strcat(toServer, path);
+			i = 0;
+			while((num = write(*sfd, &toServer[i], 1)) > 0) {
+				if(num < 0) {
+					perror("E couldn't write to server");
+					break;
+				}
+			}
+		}
+		else if(strcmp(cmd, "show") == 0) {
+			strcpy(toServer, "S\n");
+			strcat(toServer, path);
+			i = 0;
+			while((num = write(*sfd, &toServer[i], 1)) > 0) {
+				if(num < 0) {
+					perror("E couldn't write to server");
+					break;
+				}
+			}
+		}
+		else if(strcmp(cmd, "put") == 0) {
+			strcpy(toServer, "P\n");
+			strcat(toServer, path);
+			i = 0;
+			while((num = write(*sfd, &toServer[i], 1)) > 0) {
+				if(num < 0) {
+					perror("E couldn't write to server");
+					break;
+				}
+			}
+		}
+		else if(strcmp(cmd, "exit\n") == 0) {
+			strcpy(toServer, "Q\0");
+			i = 0;
+			while((num = write(*sfd, &toServer[i], 1)) > 0) {
+				if(num < 0) {
+					perror("E couldn't write to server");
+					break;
+				}
+			}
+			i = 0;
+			n = 0;
+			while((num = read(*sfd, &fromServer[i], 1)) > 0) {
+				if(num < 0) {
+					perror("E could not read from server");
+					break;
+				}
+				n += num;
+				i++;
+			}
+			if(fromServer[0] == 'E') {
+				printf("%s", fromServer);
+				strcpy(usercmd, "");
+			}
+			else {
+				printf("%s", fromServer);
+			}
+		}
+	} while(strcmp(usercmd, "exit\n") != 0);
+}
 
 int main(int argc, char *argv[]) {
 	int socketfd = 0;
-	int datafd = 0;
 	int debug = 0;
 	char *server = NULL;
 	struct sockaddr_in servAddr;
 	struct hostent *hostEntry = NULL;
 	struct in_addr **pptr;
-	int numRead;
+	int numRead = 0;
 	char buffer[BUF_SIZE];
-	// check to see if a hostname was entered
+	// check to see if a hostname and debug was entered
 	if(argc < 2) {
 		fprintf(stderr, "%s: No server specified.\n", argv[0]);
 		exit(1);
@@ -63,6 +174,7 @@ int main(int argc, char *argv[]) {
 		perror("Argument error");
 		exit(1);
 	}
+
 	if(strcmp(argv[1], "-d") == 0) {
 		debug = 1;
 		server = argv[2];
@@ -79,7 +191,36 @@ int main(int argc, char *argv[]) {
 	connectToServer(server, &servAddr, &socketfd, hostEntry, &pptr);
 	if(debug)
 		printf("Connected to server\n");
-
+	int i = 0;
+	int num = 0;
+	// Read awknoledgement message from the server
+	while((num = read(socketfd, &buffer[i], 1)) > 0) {
+		if(debug) {
+			printf("in read\n");
+		}
+		if(num < 0) {
+			perror("E");
+			exit(1);
+		}
+		numRead += num;
+		if(buffer[i] == '\n'){
+			break;
+		}
+		i++;
+	}
+	if(debug) {
+		printf("passed awknowledgement read\n");
+	}
+	// write awknoledgement message to stdout.
+	if(write(1, buffer, numRead) < 0) {
+		perror("E");
+		exit(1);
+	}
+	// call main menu.
+	if(debug) {
+		printf("calling mainmenu\n");
+	}
+	mainmenu(&socketfd, debug);
 	
 	return 0;
 }

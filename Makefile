@@ -12,6 +12,14 @@ all:
 	${CC} ${FLAGS} -o ${SERVER} ${OBJS}
 	${CC} ${FLAGS} -o ${CLIENT} ${OBJC}
 
+server:
+	${CC} ${FLAGS} -c mftpserve.c
+	${CC} ${FLAGS} -o ${SERVER} ${OBJS}
+
+client:
+	${CC} ${FLAGS} -c mftp.c
+	${CC} ${FLAGS} -o ${CLIENT} ${OBJC}
+
 mftpserve.o: mftpserve.c
 	${CC} ${FLAGS} -c mftpserve.c
 
