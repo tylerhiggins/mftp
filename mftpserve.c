@@ -66,7 +66,7 @@ void toClient(int *cfd, int debug) {
 		n = 0;
 		while((n = read(*cfd, &fromClient[i], 1)) > 0) {
 			if(debug) {
-				printf("n = %d\n", n);
+				printf("fromClient[%d] = %c\nn = %d\n", i, fromClient[i], n);
 			}
 			
 			nread += n;
@@ -84,7 +84,7 @@ void toClient(int *cfd, int debug) {
 		}
 		// if we have more than just a command, build the path into
 		// the server.
-		if(plen > 0) {
+		if(plen > 1) {
 			for(int j = 1; j < nread; j++) {
 				path[j - 1] = fromClient[j];
 			}
@@ -100,31 +100,50 @@ void toClient(int *cfd, int debug) {
 		switch (c) {
 			case 'C':
 			strcpy(response, "A: C awknowledged\n");
-			write(*cfd, response, strlen(response));
+			while((n = write(*cfd, &response[i], 1)) > 0) {
+				if(n < 0) {
+					perror("E could not write to client");
+				}
+				i++;
+			}
 			break;
 			case 'L':
 			strcpy(response, "A: L awknowledged\n");
-			write(*cfd, response, strlen(response));
+			while((n = write(*cfd, &response[i], 1)) > 0) {
+				if(n < 0) {
+					perror("E could not write to client");
+				}
+				i++;
+			}
 			break;
 			case 'G':
 			strcpy(response, "A: G awknowledged\n");
-			write(*cfd, response, strlen(response));
+			while((n = write(*cfd, &response[i], 1)) > 0) {
+				if(n < 0) {
+					perror("E could not write to client");
+				}
+				i++;
+			}
 			break;
 			case 'S':
 			strcpy(response, "A: S awknowledged\n");
-			write(*cfd, response, strlen(response));
+			while((n = write(*cfd, &response[i], 1)) > 0) {
+				if(n < 0) {
+					perror("E could not write to client");
+				}
+				i++;
+			}
 			case 'P':
 			strcpy(response, "A: P awknowledged\n");
 			write(*cfd, response, strlen(response));
 			break;
 			case 'Q':
 			strcpy(response, "A: quitting session\n");
-			if(write(*cfd, "A quitting session\n", strlen(response)) < 0) {
-				perror("E awknowledge quit");
-				if((close(*cfd)) < 0) {
-					perror("E control close error");
+			while((n = write(*cfd, &response[i], 1)) > 0) {
+				if(n < 0) {
+					perror("E could not write to client");
 				}
-				exit(1);
+				i++;
 			}
 			break;
 			default:

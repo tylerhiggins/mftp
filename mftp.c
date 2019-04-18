@@ -93,7 +93,7 @@ void mainmenu(int *sfd, int debug) {
 			// TODO: finish ls -l on server.
 		}
 		else if(strcmp(cmd, "get") == 0) {
-			strcpy(toServer, "G\n");
+			strcpy(toServer, "G");
 			strcat(toServer, path);
 			i = 0;
 			while((num = write(*sfd, &toServer[i], 1)) > 0) {
@@ -101,7 +101,9 @@ void mainmenu(int *sfd, int debug) {
 					perror("E couldn't write to server");
 					break;
 				}
+				i++;
 			}
+
 		}
 		else if(strcmp(cmd, "show") == 0) {
 			strcpy(toServer, "S\n");
@@ -126,13 +128,14 @@ void mainmenu(int *sfd, int debug) {
 			}
 		}
 		else if(strcmp(cmd, "exit\n") == 0) {
-			strcpy(toServer, "Q\0");
 			i = 0;
+			strcpy(toServer, "Q\n");
 			while((num = write(*sfd, &toServer[i], 1)) > 0) {
 				if(num < 0) {
 					perror("E couldn't write to server");
 					break;
 				}
+				i++;
 			}
 			i = 0;
 			n = 0;
