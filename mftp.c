@@ -40,6 +40,18 @@ void connectToServer(char *hname, struct sockaddr_in *sAddr, int *sfd,
 	}
 	
 }
+
+int localCommand(char *cmd) {
+	int pid = fork();
+	if(pid) {
+
+	}
+	else {
+
+	}
+}
+
+
 /* Main control for the client program, argument is a pointer
    of the control socket file descriptor and debug flag. */
 void mainmenu(int *sfd, int debug) {
@@ -62,80 +74,117 @@ void mainmenu(int *sfd, int debug) {
 		if(debug) {
 			printf("path entered %s\n", path);
 		}
+		/* local cd command */
 		if(strcmp(cmd, "cd") == 0) {
 			// TODO: write code for cd locally
 		}
+		/* remote change directory command */
 		else if(strcmp(cmd, "rcd") == 0) {
-			strcpy(toServer, "C\n");
+			strcpy(toServer, "C");
 			strcat(toServer, path);
 			i = 0;
-			while((num = write(*sfd, &toServer[i], 1)) > 0) {
-				if(num < 0) {
-					perror("E couldn't write to server");
-					break;
-				}
-				i++;
+			if(write(*sfd, toServer, strlen(toServer)) < 0) {
+				perror("E could not send message to server");
+				exit(1);
 			}
 			// TODO: write code for cd on the server
 		}
+		/* Local ls command */
 		else if(strcmp(cmd, "ls") == 0) {
 			// TODO: write code for ls -l locally
 		}
+		/* Server ls command */
 		else if(strcmp(cmd, "rls") == 0) {
-			strcpy(toServer, "L\n");
+			strcpy(toServer, "L");
+			if(write(*sfd, toServer, strlen(toServer)) < 0) {
+				perror("E could not send message to server");
+				exit(1);
+			}
 			i = 0;
-			while((num = write(*sfd, &toServer[i], 1)) > 0) {
+			n = 0;
+			// Read message from the server.
+			while((num = read(*sfd, &fromServer[i], 1)) > 0) {
 				if(num < 0) {
-					perror("E couldn't write to server");
+					perror("E could not read from server");
 					break;
 				}
+				n += num;
+				i++;
+			}
+			// If it's an error send error 
+			if(fromServer[0] == 'E') {
+				printf("%s", fromServer);
+				strcpy(usercmd, "");
+			}
+			else {
+				printf("%s", fromServer);
 			}
 			// TODO: finish ls -l on server.
 		}
+		/* Get command */
 		else if(strcmp(cmd, "get") == 0) {
 			strcpy(toServer, "G");
 			strcat(toServer, path);
+			if(write(*sfd, toServer, strlen(toServer)) < 0) {
+				perror("E could not send message to server");
+				exit(1);
+			}
 			i = 0;
-			while((num = write(*sfd, &toServer[i], 1)) > 0) {
+			n = 0;
+			// Read message from the server.
+			while((num = read(*sfd, &fromServer[i], 1)) > 0) {
 				if(num < 0) {
-					perror("E couldn't write to server");
+					perror("E could not read from server");
 					break;
 				}
+				n += num;
 				i++;
+			}
+			// If it's an error send error 
+			if(fromServer[0] == 'E') {
+				printf("%s", fromServer);
+				strcpy(usercmd, "");
+			}
+			else {
+				printf("%s", fromServer);
 			}
 
 		}
+		/* Show command */
 		else if(strcmp(cmd, "show") == 0) {
-			strcpy(toServer, "S\n");
+			strcpy(toServer, "S");
 			strcat(toServer, path);
-			i = 0;
-			while((num = write(*sfd, &toServer[i], 1)) > 0) {
-				if(num < 0) {
-					perror("E couldn't write to server");
-					break;
-				}
+			if(write(*sfd, toServer, strlen(toServer)) < 0) {
+				perror("E could not send message to server");
+				exit(1);
 			}
-		}
-		else if(strcmp(cmd, "put") == 0) {
-			strcpy(toServer, "P\n");
-			strcat(toServer, path);
 			i = 0;
-			while((num = write(*sfd, &toServer[i], 1)) > 0) {
+			n = 0;
+			// Read message from the server.
+			while((num = read(*sfd, &fromServer[i], 1)) > 0) {
 				if(num < 0) {
-					perror("E couldn't write to server");
+					perror("E could not read from server");
 					break;
 				}
-			}
-		}
-		else if(strcmp(cmd, "exit\n") == 0) {
-			i = 0;
-			strcpy(toServer, "Q\n");
-			while((num = write(*sfd, &toServer[i], 1)) > 0) {
-				if(num < 0) {
-					perror("E couldn't write to server");
-					break;
-				}
+				n += num;
 				i++;
+			}
+			// If it's an error send error 
+			if(fromServer[0] == 'E') {
+				printf("%s", fromServer);
+				strcpy(usercmd, "");
+			}
+			else {
+				printf("%s", fromServer);
+			}
+		}
+		/* put command */
+		else if(strcmp(cmd, "put") == 0) {
+			strcpy(toServer, "P");
+			strcat(toServer, path);
+			if(write(*sfd, toServer, strlen(toServer)) < 0) {
+				perror("E could not send message to server");
+				exit(1);
 			}
 			i = 0;
 			n = 0;
@@ -147,6 +196,33 @@ void mainmenu(int *sfd, int debug) {
 				n += num;
 				i++;
 			}
+			if(fromServer[0] == 'E') {
+				printf("%s", fromServer);
+				strcpy(usercmd, "");
+			}
+			else {
+				printf("%s", fromServer);
+			}
+		}
+		/* exit command */
+		else if(strcmp(cmd, "exit\n") == 0) {			
+			strcpy(toServer, "Q\n");
+			if(write(*sfd, toServer, strlen(toServer)) < 0) {
+				perror("E could not send message to server");
+				exit(1);
+			}
+			i = 0;
+			n = 0;
+			// Read message from the server.
+			while((num = read(*sfd, &fromServer[i], 1)) > 0) {
+				if(num < 0) {
+					perror("E could not read from server");
+					break;
+				}
+				n += num;
+				i++;
+			}
+			// If it's an error send error 
 			if(fromServer[0] == 'E') {
 				printf("%s", fromServer);
 				strcpy(usercmd, "");
@@ -224,6 +300,7 @@ int main(int argc, char *argv[]) {
 		printf("calling mainmenu\n");
 	}
 	mainmenu(&socketfd, debug);
+	close(socketfd);
 	
 	return 0;
 }

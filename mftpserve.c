@@ -90,7 +90,7 @@ void toClient(int *cfd, int debug) {
 			}
 		}
 		// add the null terminator from the server.
-		path[plen] = '\0';
+		path[plen - 1] = '\0';
 		if(debug) 
 			printf("command received: %c\n", c);
 		if(debug && plen > 0) {
@@ -139,11 +139,8 @@ void toClient(int *cfd, int debug) {
 			break;
 			case 'Q':
 			strcpy(response, "A: quitting session\n");
-			while((n = write(*cfd, &response[i], 1)) > 0) {
-				if(n < 0) {
-					perror("E could not write to client");
-				}
-				i++;
+			if(write(*cfd, response, strlen(response)) < 0) {
+				perror("E could not send message to client");
 			}
 			break;
 			default:
@@ -155,6 +152,7 @@ void toClient(int *cfd, int debug) {
 
 		}
 	} while(c != 'Q');
+	
 }
 /* displays the hostname of the client (for the server) */
 void toServer(struct sockaddr_in *cAddr, int *cfd, int debug) {
@@ -168,17 +166,14 @@ void toServer(struct sockaddr_in *cAddr, int *cfd, int debug) {
 		}
 	hostName = hostEntry->h_name;
 	printf("%s connected.\n", hostName);
-	waitpid(-1, NULL, 0);
-	printf("%s connection closed.\n", hostName);
-	if(close(*cfd) < 0) {
-		perror("E close control desc. serverside");
-	}
+
 }
 
 
 /* Main function */
 int main(int argc, char *argv[]) {
 	int debug = 0;
+	int cclosed = 0;
 	if(argc > 3) {
 		errno = E2BIG;
 		perror("Argument error");
@@ -218,18 +213,16 @@ int main(int argc, char *argv[]) {
 			if(debug)
 				printf("In child\n");
 			toClient(&controlfd, debug);
-			if(close(controlfd) < 0) {
-				perror("E close control child process");
-				exit(1);
-			}
 			exit(0);
 		}
 		else {
 			// server (parent) code
 			if(debug)
 				printf("In parent\n");
+			
 			toServer(&clientAddr, &controlfd, debug);
-		}	
+		}
+		waitpid(-1, NULL, 0);
 	}
 	if(close(clistenfd) < 0) {
 		perror("E close error");
