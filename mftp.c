@@ -58,10 +58,8 @@ char *readFromServer(int *sfd int *n){
 
 	return buffer;
 }
-/* localCommand takes in two char pointers, one contains the command to be run
-   and the second argument to the path (if applicable) returns 0 on success or
-   -1 for failure. */
-int localCommand(char *cmd, char *path) {
+/* execCmd executes a local command by forking and retrieving info. */
+void execCmd(char *cmd) {
 	int pid = fork();
 	if(pid) {
 
@@ -92,6 +90,30 @@ void mainmenu(int *sfd, int debug) {
 		path = strtok(NULL, " ");
 		if(debug) {
 			printf("path entered %s\n", path);
+		}
+		switch(cmd[0]) {
+			case 'c':
+			changeD(path);
+			break;
+			case 'l':
+			execCmd("ls -l");
+			break;
+			case 'r':
+			switch(cmd[1]) {
+				case 'c':
+				break;
+				case 'l':
+				break;
+			}
+			break;
+			case 'g':
+			break;
+			case 'p':
+			break;
+			case 's':
+			break;
+			case 'e':
+			break;
 		}
 		
 	} while(strcmp(usercmd, "exit\n") != 0);
