@@ -44,30 +44,42 @@ void connectToServer(char *hname, struct sockaddr_in *sAddr, int *sfd,
    file descriptor, one is a character array for the command, and the final
    argument is the path. Return value is an int indicating whether or not the
    write was successful. */
-int writeToServer(int *sfd, char *c char *p) {
-	int status = 0;
-
-	return status;
+void writeToServer(int *sfd, char *c char *p) {
+	char buffer[BUF_SIZE];
+	
 }
 /* readFromServer takes in a pointer to the socket file descriptor and a pointer
    to store the number of bytes read in order to read status messages
    from the server.  Return should be the string read from the server */
-char *readFromServer(int *sfd int *n){
+void *readFromServer(int *sfd){
 	int n
 	char buffer[BUF_SIZE];
 
-	return buffer;
 }
 /* execCmd executes a local command by forking and retrieving info. */
-void execCmd(char *cmd) {
-	int pid = fork();
+void execCmd() {
+	int pid;
+	int fd[2];
+	if(pipe(fd) < 0) {
+		perror("pipe errror");
+		return;
+	}
+	if((pid = fork()) < 0) {
+		perror("fork error");
+		return;
+	}
 	if(pid) {
-
+		close(fd[0]);
+		close(fd[1]);
+		wait(NULL);
 	}
 	else {
-
+		close(fd[1]);
+		close(0); dup(fd[0]); close(fd[0]);
+		execl("/bin/ls", "ls", "-l", (char *)0);
+		fprintf(stderr, "exec of \'ls -l\' failed\n");
+		exit(1);
 	}
-	return 0;
 }
 
 
@@ -96,7 +108,7 @@ void mainmenu(int *sfd, int debug) {
 			changeD(path);
 			break;
 			case 'l':
-			execCmd("ls -l");
+			execCmd();
 			break;
 			case 'r':
 			switch(cmd[1]) {
@@ -113,6 +125,8 @@ void mainmenu(int *sfd, int debug) {
 			case 's':
 			break;
 			case 'e':
+			writeToServer(sfd, "Q\n\0", NULL);
+			readFromServer(sfd);
 			break;
 		}
 		
