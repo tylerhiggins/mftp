@@ -40,8 +40,28 @@ void connectToServer(char *hname, struct sockaddr_in *sAddr, int *sfd,
 	}
 	
 }
+/* writeToServer takes 3 arguments, one is a pointer to the socket
+   file descriptor, one is a character array for the command, and the final
+   argument is the path. Return value is an int indicating whether or not the
+   write was successful. */
+int writeToServer(int *sfd, char *c char *p) {
+	int status = 0;
 
-int localCommand(char *cmd) {
+	return status;
+}
+/* readFromServer takes in a pointer to the socket file descriptor and a pointer
+   to store the number of bytes read in order to read status messages
+   from the server.  Return should be the string read from the server */
+char *readFromServer(int *sfd int *n){
+	int n
+	char buffer[BUF_SIZE];
+
+	return buffer;
+}
+/* localCommand takes in two char pointers, one contains the command to be run
+   and the second argument to the path (if applicable) returns 0 on success or
+   -1 for failure. */
+int localCommand(char *cmd, char *path) {
 	int pid = fork();
 	if(pid) {
 
@@ -49,6 +69,7 @@ int localCommand(char *cmd) {
 	else {
 
 	}
+	return 0;
 }
 
 
@@ -57,8 +78,6 @@ int localCommand(char *cmd) {
 void mainmenu(int *sfd, int debug) {
 	char usercmd[BUF_SIZE];
 	char *cmd, *path;
-	char toServer[BUF_SIZE];
-	char fromServer[BUF_SIZE];
 	int num = 0;
 	int n = 0;
 	int i = 0;
