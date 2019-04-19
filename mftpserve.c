@@ -96,61 +96,7 @@ void toClient(int *cfd, int debug) {
 		if(debug && plen > 0) {
 			printf("path received: %s\n", path);
 		}
-		i = 0;
-		switch (c) {
-			case 'C':
-			strcpy(response, "A: C awknowledged\n");
-			while((n = write(*cfd, &response[i], 1)) > 0) {
-				if(n < 0) {
-					perror("E could not write to client");
-				}
-				i++;
-			}
-			break;
-			case 'L':
-			strcpy(response, "A: L awknowledged\n");
-			while((n = write(*cfd, &response[i], 1)) > 0) {
-				if(n < 0) {
-					perror("E could not write to client");
-				}
-				i++;
-			}
-			break;
-			case 'G':
-			strcpy(response, "A: G awknowledged\n");
-			while((n = write(*cfd, &response[i], 1)) > 0) {
-				if(n < 0) {
-					perror("E could not write to client");
-				}
-				i++;
-			}
-			break;
-			case 'S':
-			strcpy(response, "A: S awknowledged\n");
-			while((n = write(*cfd, &response[i], 1)) > 0) {
-				if(n < 0) {
-					perror("E could not write to client");
-				}
-				i++;
-			}
-			case 'P':
-			strcpy(response, "A: P awknowledged\n");
-			write(*cfd, response, strlen(response));
-			break;
-			case 'Q':
-			strcpy(response, "A: quitting session\n");
-			if(write(*cfd, response, strlen(response)) < 0) {
-				perror("E could not send message to client");
-			}
-			break;
-			default:
-			if(write(*cfd, "E\n", strlen("E\n")) < 0) {
-				perror("E could not write to client");
-			}
-			break;
-
-
-		}
+		
 	} while(c != 'Q');
 	
 }
