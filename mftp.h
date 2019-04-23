@@ -15,7 +15,6 @@ mftp.h
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
-#include "mftp.h"
 
 #define BUF_SIZE 4096
 #define PORT_NUM 49999
@@ -23,6 +22,6 @@ mftp.h
 void createSocket(int *fd) {
 	if((*fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		perror("socket error");
-		exit(1)
+		exit(1);
 	}
 }

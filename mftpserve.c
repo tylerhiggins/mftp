@@ -30,19 +30,20 @@ int setDebug(int ac, char *av[]) {
 /* Creating server address, arguments: server address and the
    listener file discriptor */
 void setServAddr(struct sockaddr_in *sAddr, int *lfd) {
-	memset(sAddr, 0, sizeof(sAddr));
+	memset(sAddr, 0, sizeof(*sAddr));
 	sAddr->sin_family = AF_INET;
 	sAddr->sin_port = htons(PORT_NUM);
+	printf("Port number = %d\n", PORT_NUM);
 	sAddr->sin_addr.s_addr = htonl(INADDR_ANY);
-	if(bind(*lfd, (struct sock_addr *)sAddr, sizeof(*sAddr)) < 0){
-		perror("Parent: fatel error binding socket to port 49999 -> %s", strerror(errno));
+	if(bind(*lfd, (struct sockaddr *)sAddr, sizeof(*sAddr)) < 0){
+		fprintf(stderr, "Parent: fatel error binding socket to port 49999 -> %s", strerror(errno));
 		exit(1);
 	}
 
 }
 
 int getHost(struct sockaddr_in *cAddr, char **n, int cid) {
-	struct hostent hostEntry;
+	struct hostent *hostEntry;
 	char *hname = *n;
 	if((hostEntry = gethostbyaddr(&cAddr->sin_addr, sizeof(struct in_addr),
 		AF_INET)) == NULL) {
@@ -54,18 +55,72 @@ int getHost(struct sockaddr_in *cAddr, char **n, int cid) {
 	return 0;
 
 }
-
-
-void client(int *cid, struct socaddr_in *cAddr, int *ctrlfd, int debug) {
-	char *hostname;
-	char buffer[BUF_SIZE];
-	if(getHost(cAddr, &hostname, *cid) != 0) {
-		hostname = inet_ntoa(cAddr->sin_addr);
-		printf("Child %d: Client IP address %s\n", inet_ntoa(cAddr->sin_addr));
+/* receieve command reads from the client and places it in the buffer
+   arguments is a pointer to the control file descriptor, buffer to store
+   the command and the child id. */
+void receieveCommand(int *ctrlfd, char buf[], int cid) {
+	int n;
+	int nread = 0;
+	for(int i = 0; i < BUF_SIZE; i++) {
+		if((n = read(*ctrlfd, &buf[i], 1)) < 0){
+			fprintf(stderr, "Child %d: could not retrieve message -> %s\n", cid, strerror(errno));
+			break;
+		}
+		nread += n;
+		if(buf[i] == '\0')
+			break;
 	}
-	printf("Child %d: Conenction accepted from host %s\n", hostname);
-	receiveCommand(char &buffer);
 
+}
+/* Write to the client, arguments is the pointer to the control file descriptor, 
+   the awknowledgment or error message, the child id, and the debug flag */
+void writeCommand(int *ctrlfd, char *message, int cid, int debug) {
+	int i = 0;
+	if(debug)
+		printf("Child %d: sending positive awknowledgment\n", cid);
+	for(i = 0; i < BUF_SIZE; i++) {
+		if(write(*ctrlfd, &message[i], 1) < 0) {
+			fprintf(stderr, "Child %d: could not send message -> %s\n", cid, strerror(errno));
+			break;
+		}
+		if(message[i] == '\0')
+			break;
+	}
+
+}
+/* The main driver function for the client, it takes in the child id, the address
+   of the client, the the control file descriptor, and debug flag as arguments*/
+void client(int cid, struct sockaddr_in cAddr, int ctrlfd, int debug) {
+	char *hostname;
+	char buffer[BUF_SIZE], cmd, path[BUF_SIZE];
+	int plen;
+	if(getHost(&cAddr, &hostname, cid) != 0) {
+		hostname = inet_ntoa(cAddr.sin_addr);
+		printf("Child %d: Client IP address %s\n", cid, inet_ntoa(cAddr.sin_addr));
+	}
+	printf("Child %d: Conenction accepted from host %s\n", cid, hostname);
+	do{ 
+		plen = 0;
+		receieveCommand(&ctrlfd, buffer, cid);
+		cmd = buffer[0];
+		for(int i = 1; i < BUF_SIZE; i++) {
+			path[i-1] = buffer[i];
+			plen++;
+			if(path[i-1] == '\0')
+				break;
+		}
+		switch(cmd){
+			case 'Q':
+			if(debug)
+				printf("Child %d: Quitting\n", cid);
+			writeCommand(&ctrlfd, "A\0", cid, debug);
+			break;
+			default:
+			break;
+		}
+	}while(cmd != 'Q');
+	if(debug)
+		printf("Child %d: exiting normally\n", cid);
 }
 // TODO: Create Listener socket
 // TODO: Create reader/writer functions
@@ -74,30 +129,33 @@ void client(int *cid, struct socaddr_in *cAddr, int *ctrlfd, int debug) {
 // TODO: create data connection
 int main(int argc, char *argv[]) {
 	int debug = 0;
-	if((debug = setDebug(argc, argv)) < 0) {
-		fprintf(stderr, "usage: %s [-d]\n");
-		exit(1);
+	if(argc > 1) {
+		if((debug = setDebug(argc, argv)) < 0) {
+			fprintf(stderr, "usage: %s [-d]\n", argv[0]);
+			exit(1);
+		}
 	}
 	if(debug)
 		printf("Parent: debug mode enabled\n");
 	int listenfd;
 	createSocket(&listenfd);
 	if(debug)
-		printf("Parent: socket created with discriptor %d\n", listenfd);
+		printf("Parent: socket created with descriptor %d\n", listenfd);
 	struct sockaddr_in servAddr;
 	setServAddr(&servAddr, &listenfd);
 	if(debug)
-		printf("Parent: socket bound to port %ld\n", servAddr.sin_port);
+		printf("Parent: socket bound to port %d\n", servAddr.sin_port);
 	listen(listenfd, BACKLOG);
 	if(debug)
 		printf("Parent: listening with connection queue of %d\n", BACKLOG);
 	// Loop until accepting a conneciton.
-	struct sockaddr_in clientaddr;
+	struct sockaddr_in clientAddr;
 	int controlfd;
 	int pid;
-	for(;;;) {
+	socklen_t l = sizeof(struct sockaddr_in);
+	for(;;) {
 		waitpid(-1, NULL, WNOHANG);
-		controlfd = accept(listenfd, (struct sockaddr_in *) &clientAddr, sizeof(struct sockaddr_in));
+		controlfd = accept(listenfd, (struct sockaddr *) &clientAddr, &l);
 		if(debug)
 			printf("Parent: accepted client with file descriptor of %d", controlfd);
 		if((pid = fork()) < 0) {
@@ -113,7 +171,7 @@ int main(int argc, char *argv[]) {
 			int cid = getpid();
 			if(debug)
 				printf("Child %d: started\n", cid);
-			client(&cid, &clientAddr, &controlfd, debug);
+			client(cid, clientAddr, controlfd, debug);
 		}
 
 	}

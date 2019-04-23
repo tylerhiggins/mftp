@@ -17,7 +17,7 @@ client:
 
 server:
 	${CC} ${FLAG} -c mftpserve.c
-	${CC} ${FLAG} -o ${SERVER} ${SERVEO}
+	${CC} ${FLAG} -o ${SERV} ${SERVO}
 
 clean:
-	rm -f ${CLIENT} ${SERVER} ${CLIO} ${SERVO}
+	rm -f ${CLIENT} ${SERV} ${CLIO} ${SERVO}
