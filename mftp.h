@@ -1,18 +1,28 @@
-#ifndef MFTP_H
-#define MFTP_H
-/* Specifies which port to listen for for the */
-#define PORT_NUM 49999
-/* Buffer size */
-#define BUF_SIZE 4096
+/*
+Tyler Higgins
+CS 360
+mftp.h
+*/
 
-/* Create the socket to communitcate with the client/server
-   Argument, the file descriptor for the socket. */
-void createSocket(int *sfd) {
-		if((*sfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		perror("Server Error");
-		exit(1);
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/socket.h>
+#include "mftp.h"
+
+#define BUF_SIZE 4096
+#define PORT_NUM 49999
+
+void createSocket(int *fd) {
+	if((*fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+		perror("socket error");
+		exit(1)
 	}
 }
-
-
-#endif

@@ -1,40 +1,23 @@
-CC = cc 
-FLAGS = -Wall
-OBJC = mftp.o
-OBJS = mftpserve.o
+CC = cc
+FLAG = -Wall
+SERV = mftpserve
 CLIENT = mftp
-SERVER = mftpserve
-ARGS = localhost
+SERVO = mftpserve.o
+CLIO = mftp.o
 
 all:
-	${CC} ${FLAGS} -c mftpserve.c
-	${CC} ${FLAGS} -c mftp.c
-	${CC} ${FLAGS} -o ${SERVER} ${OBJS}
-	${CC} ${FLAGS} -o ${CLIENT} ${OBJC}
-
-server:
-	${CC} ${FLAGS} -c mftpserve.c
-	${CC} ${FLAGS} -o ${SERVER} ${OBJS}
+	${CC} ${FLAG} -c mftpserve.c
+	${CC} ${FLAG} -c mftp.c
+	${CC} ${FLAG} -o ${SERV} ${SERVO}
+	${CC} ${FLAG} -o ${CLIENT} ${CLIO}
 
 client:
-	${CC} ${FLAGS} -c mftp.c
-	${CC} ${FLAGS} -o ${CLIENT} ${OBJC}
+	${CC} ${FLAG} -c mftp.c
+	${CC} ${FLAG} -o ${CLIENT} ${CLIO}
 
-mftpserve.o: mftpserve.c
-	${CC} ${FLAGS} -c mftpserve.c
-
-mftp.o: mftp.c
-	${CC} ${FLAGS} -c mftp.c
-
-mftpserve.o: mftpserve.c mftp.h
-
-mftp.o: mftp.c mftp.h
-
-runserv:
-	./${SERVER}
-
-runclient:
-	./${CLIENT} ${ARGS}
+server:
+	${CC} ${FLAG} -c mftpserve.c
+	${CC} ${FLAG} -o ${SERVER} ${SERVEO}
 
 clean:
-	rm -fr ${CLIENT} ${SERVER} ${OBJC} ${OBJS}
+	rm -f ${CLIENT} ${SERVER} ${CLIO} ${SERVO}

@@ -1,178 +1,122 @@
 /*
 Tyler Higgins
-CS 360
-Final Project - Client
-mftp.c
+cs 360
+mftpserve.c
 */
 
-#include <sys/socket.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#include <sys/types.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <string.h>
 #include <errno.h>
+#include <string.h>
+#include <sys/types.h>
 #include <sys/wait.h>
-#include <sys/stat.h>
+#include <sys/socket.h>
 #include "mftp.h"
 
 #define BACKLOG 4
+/* Checks for debug flag */
+int setDebug(int ac, char *av[]) {
+	if(ac < 2 && ac > 2)
+		return -1;
+	if(strcmp(av[1], "-d") != 0)
+		return -1;
+	return 1;
 
-
-/* Arguments, serverAddr sockaddr and the listener socket file descriptor,
-   creates the port socket. */
+}
+/* Creating server address, arguments: server address and the
+   listener file discriptor */
 void setServAddr(struct sockaddr_in *sAddr, int *lfd) {
+	memset(sAddr, 0, sizeof(sAddr));
 	sAddr->sin_family = AF_INET;
 	sAddr->sin_port = htons(PORT_NUM);
 	sAddr->sin_addr.s_addr = htonl(INADDR_ANY);
-
-	if(bind(*lfd, (struct sockaddr *) sAddr, sizeof(*sAddr)) < 0) {
-		perror("bind");
+	if(bind(*lfd, (struct sock_addr *)sAddr, sizeof(*sAddr)) < 0){
+		perror("Parent: fatel error binding socket to port 49999 -> %s", strerror(errno));
 		exit(1);
 	}
+
 }
-/* Argument - connection file descriptor
-   Displays sucessful connection to the server. */
-void toClient(int *cfd, int debug) {
-	int nread = 0, n = 0;
-	int fromClient[BUF_SIZE];
-	int i = 0;
-	char c;
-	char path[BUF_SIZE];
-	char response[BUF_SIZE];
-	char *ret;
-	int plen = 0;
-	// Awknowledge connection between client and server.
-	strcpy(response, "A: Connected\n");
-	while((n = write(*cfd, &response[i], 1)) > 0) {
-		if(debug) {
-			printf("n = %d\n", n);
-		}
-		if(n < 0) {
-			perror("E cannot write to client");
-			exit(1);
-		}
-		if(response[i] == '\n')
-			break;
-		i++;
-	}
-	// Wait for client directions.
-	do {
-		nread = 0;
-		i = 0;
-		n = 0;
-		while((n = read(*cfd, &fromClient[i], 1)) > 0) {
-			if(debug) {
-				printf("fromClient[%d] = %c\nn = %d\n", i, fromClient[i], n);
-			}
-			
-			nread += n;
-			if(fromClient[i] == '\n') {
-				break;
-			}
-			i++;	
-		}
-		// split the command into two
-		c = fromClient[0];  // c for command
-		// get the length of the string starting from the first index
-		plen = nread - 1;
-		if(debug) {
-			printf("plen = %d\n", plen);
-		}
-		// if we have more than just a command, build the path into
-		// the server.
-		if(plen > 1) {
-			for(int j = 1; j < nread; j++) {
-				path[j - 1] = fromClient[j];
-			}
-		}
-		// add the null terminator from the server.
-		path[plen - 1] = '\0';
-		if(debug) 
-			printf("command received: %c\n", c);
-		if(debug && plen > 0) {
-			printf("path received: %s\n", path);
-		}
-		
-	} while(c != 'Q');
-	
-}
-/* displays the hostname of the client (for the server) */
-void toServer(struct sockaddr_in *cAddr, int *cfd, int debug) {
-	struct hostent *hostEntry;
-	char *hostName;
+
+int getHost(struct sockaddr_in *cAddr, char **n, int cid) {
+	struct hostent hostEntry;
+	char *hname = *n;
 	if((hostEntry = gethostbyaddr(&cAddr->sin_addr, sizeof(struct in_addr),
-			AF_INET)) == NULL) {
-			herror("E hostname");
-			close(*cfd);
-			exit(1);
-		}
-	hostName = hostEntry->h_name;
-	printf("%s connected.\n", hostName);
+		AF_INET)) == NULL) {
+		printf("Child %d: Translation of client hostname failed -> %s\n", cid, 
+			strerror(errno));
+		return -1;
+	}
+	hname = hostEntry->h_name;
+	return 0;
 
 }
 
 
-/* Main function */
+void client(int *cid, struct socaddr_in *cAddr, int *ctrlfd, int debug) {
+	char *hostname;
+	char buffer[BUF_SIZE];
+	if(getHost(cAddr, &hostname, *cid) != 0) {
+		hostname = inet_ntoa(cAddr->sin_addr);
+		printf("Child %d: Client IP address %s\n", inet_ntoa(cAddr->sin_addr));
+	}
+	printf("Child %d: Conenction accepted from host %s\n", hostname);
+	receiveCommand(char &buffer);
+
+}
+// TODO: Create Listener socket
+// TODO: Create reader/writer functions
+// TODO: fork client and server processes
+// TODO: accept connections
+// TODO: create data connection
 int main(int argc, char *argv[]) {
 	int debug = 0;
-	int cclosed = 0;
-	if(argc > 3) {
-		errno = E2BIG;
-		perror("Argument error");
+	if((debug = setDebug(argc, argv)) < 0) {
+		fprintf(stderr, "usage: %s [-d]\n");
 		exit(1);
 	}
-	if(argc == 2) {
-		if(strcmp(argv[1], "-d") != 0) {
-			fprintf(stderr, "E Argument error: only '-d' command allowed.\n");
+	if(debug)
+		printf("Parent: debug mode enabled\n");
+	int listenfd;
+	createSocket(&listenfd);
+	if(debug)
+		printf("Parent: socket created with discriptor %d\n", listenfd);
+	struct sockaddr_in servAddr;
+	setServAddr(&servAddr, &listenfd);
+	if(debug)
+		printf("Parent: socket bound to port %ld\n", servAddr.sin_port);
+	listen(listenfd, BACKLOG);
+	if(debug)
+		printf("Parent: listening with connection queue of %d\n", BACKLOG);
+	// Loop until accepting a conneciton.
+	struct sockaddr_in clientaddr;
+	int controlfd;
+	int pid;
+	for(;;;) {
+		waitpid(-1, NULL, WNOHANG);
+		controlfd = accept(listenfd, (struct sockaddr_in *) &clientAddr, sizeof(struct sockaddr_in));
+		if(debug)
+			printf("Parent: accepted client with file descriptor of %d", controlfd);
+		if((pid = fork()) < 0) {
+			perror("fork error");
 			exit(1);
 		}
-		debug = 1;
-	}
-
-
-	struct sockaddr_in servAddr;
-	struct sockaddr_in clientAddr;
-	int clistenfd, dlistenfd, controlfd, datafd;
-	socklen_t length = sizeof(struct sockaddr_in);
-
-	createSocket(&clistenfd);  // create the listener socket
-	if(debug)
-		printf("created socket.\n");
-	memset(&servAddr, 0, sizeof(servAddr));   
-
-	setServAddr(&servAddr, &clistenfd);			// build socket to a port
-	listen(clistenfd, BACKLOG);					// listen for a connection
-	if(debug)
-		printf("listening for connection.\n");
-	while(1) {
-		// accept the connection
-		if((controlfd = accept(clistenfd, (struct sockaddr *) &clientAddr, &length)) < 0){
-			perror("E");
-		}
-
-		if(!fork()) {
-			// child (client) code
+		if(pid) {
+			close(controlfd);
 			if(debug)
-				printf("In child\n");
-			toClient(&controlfd, debug);
-			exit(0);
+				printf("Parent: spawned child %d and awaiting another connection.\n", pid);
 		}
 		else {
-			// server (parent) code
+			int cid = getpid();
 			if(debug)
-				printf("In parent\n");
-			
-			toServer(&clientAddr, &controlfd, debug);
+				printf("Child %d: started\n", cid);
+			client(&cid, &clientAddr, &controlfd, debug);
 		}
-		waitpid(-1, NULL, 0);
+
 	}
-	if(close(clistenfd) < 0) {
-		perror("E close error");
-		exit(1);
-	}
+
 	return 0;
 }
