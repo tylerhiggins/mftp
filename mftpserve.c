@@ -20,7 +20,7 @@ mftpserve.c
 #define BACKLOG 4
 /* Checks for debug flag */
 int setDebug(int ac, char *av[]) {
-	if(ac < 2 && ac > 2)
+	if(ac > 2)
 		return -1;
 	if(strcmp(av[1], "-d") != 0)
 		return -1;
@@ -41,7 +41,10 @@ void setServAddr(struct sockaddr_in *sAddr, int *lfd) {
 	}
 
 }
-
+/* getHost takes the clients address information, a pointer to
+   a character string, and the child pid as arguments.  This
+   function attempts to retrieve a string representation of
+   the client that is connected to the server. */
 int getHost(struct sockaddr_in *cAddr, char **n, int cid) {
 	struct hostent *hostEntry;
 	char *hname = *n;
@@ -144,7 +147,7 @@ int main(int argc, char *argv[]) {
 	struct sockaddr_in servAddr;
 	setServAddr(&servAddr, &listenfd);
 	if(debug)
-		printf("Parent: socket bound to port %d\n", servAddr.sin_port);
+		printf("Parent: socket bound to port 49999\n");
 	listen(listenfd, BACKLOG);
 	if(debug)
 		printf("Parent: listening with connection queue of %d\n", BACKLOG);
