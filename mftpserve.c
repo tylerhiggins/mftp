@@ -16,6 +16,7 @@ mftpserve.c
 #include <sys/wait.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include "mftp.h"
 
 #define BACKLOG 4
@@ -49,10 +50,11 @@ void setDataAddr(struct sockaddr_in *dAddr, int *dlfd, char m[]){
 	dAddr->sin_family = AF_INET;
 	dAddr->sin_port = 0;
 	dAddr->sin_addr.s_addr = htonl(INADDR_ANY);
-	if(bind(*lfd, (struct sockaddr *)dAddr, sizeof(*dAddr)) < 0){
-		strcpy(m, "E");
-		strcat(m, strerror(errno));
-		strcat(m, "\n");
+	if(bind(*dlfd, (struct sockaddr *)dAddr, sizeof(*dAddr)) < 0){
+		sprintf(m, "E%s\n", strerror(errno));
+		// strcpy(m, "E");
+		// strcat(m, strerror(errno));
+		// strcat(m, "\n");
 		return;
 	}
 }
@@ -63,7 +65,7 @@ void setDataAddr(struct sockaddr_in *dAddr, int *dlfd, char m[]){
 char *getHost(struct sockaddr_in *cAddr, int cid) {
 	struct hostent *hostEntry;
 	if((hostEntry = gethostbyaddr(&cAddr->sin_addr, sizeof(struct in_addr),
-		AF_INET)) == NULL) {
+			AF_INET)) == NULL) {
 		printf("Child %d: Translation of client hostname failed -> %s\n", cid, 
 			strerror(errno));
 		return NULL;
@@ -73,7 +75,36 @@ char *getHost(struct sockaddr_in *cAddr, int cid) {
 }
 // TODO: fork and call ls
 void listDirectory(int *datafd, char m[], int debug){
-
+	int pid;
+	int fd[2];
+	pipe(fd);
+	int rdr, wtr;
+	rdr = fd[0]; wtr = fd[1];
+	if((pid = fork()) < 0){
+		perror("forking error");
+		return;
+	}
+	if(pid) { // parent
+		// don't need to read or write anything
+		close(rdr);
+		close(wtr);
+		waitpid(pid, NULL, 0);
+	}
+	else{ // child
+		close(wtr);
+		close(rdr);
+		// set up the data descriptor to write.
+		dup2(*datafd, 1);
+		close(*datafd);
+		execlp("ls", "ls", "-l", (char *)0);
+		sprintf(m, "E%s\n", strerror(errno));
+		// strcpy(m, "E");
+		// strcat(m, strerror(errno));
+		// strcat(m, "\n");
+		exit(1);
+	}
+	strcpy(m, "A");
+	strcat(m, "\n");
 }
 /* receieve command reads from the client and places it in the buffer
    arguments is a pointer to the control file descriptor, buffer to store
@@ -86,12 +117,45 @@ void receieveCommand(int *ctrlfd, char buf[], int cid) {
 			fprintf(stderr, "Child %d: could not retrieve message -> %s\n", cid, strerror(errno));
 			break;
 		}
-		nread += n;
+		nread += n;	
 		if(buf[i] == '\n') {
 			buf[i] = '\0';
 			break;
 		}
 	}
+
+}
+
+/* retrieveFile opens a file and transfers the file using the data file descriptor,
+   arguments are the pointer to the data file descriptor, the path to the file, and
+   debug flag*/
+int retrieveFile(int *datafd, char *path, char m[], int debug) {
+	char fullpath[BUF_SIZE];
+	getcwd(fullpath, BUF_SIZE);
+	strcat(fullpath, path);
+	int fd;
+	char buffer[1];
+	if(access(fullpath, R_OK) != 0) {
+		sprintf(m, "E%s\n", strerror(errno));
+		return -1;
+	}
+	if(debug){
+		printf("passed access\n");
+	}
+	if((fd = open(fullpath, O_RDONLY)) < 0) {
+		sprintf(m, "E%s\n", strerror(errno));
+		return -1;
+	}
+	if(debug)
+		printf("opened file\n");
+	while(read(fd, &buffer[0], 1) > 0){
+		write(*datafd, &buffer[0], 1);
+	}
+	if(debug){
+		printf("finished writing data\n");
+	}
+	sprintf(m, "A\n");
+	return 0;
 
 }
 /* Write to the client, arguments is the pointer to the control file descriptor, 
@@ -118,35 +182,30 @@ void writeCommand(int *ctrlfd, char *message, int cid, int debug) {
    that will be sent to the client, and debug flag */
 void changecwd(char* p, char buf[], int debug) {
 	struct stat d;
-	if(lstat(p,mftpserve &d) < 0) {
-		strcpy(buf, "E");
-		strcat(buf, strerror(errno));
-		strcat(buf, "\n");
+	if(lstat(p, &d) < 0) {
+		sprintf(buf, "E%s\n", strerror(errno));
+		// strcpy(buf, "E");
+		// strcat(buf, strerror(errno));
+		// strcat(buf, "\n");
 		return;
 	}
 	if(debug)
 		printf("passed lstat\n");
 	if(!S_ISDIR(d.st_mode)){
-		strcpy(buf, "E");
-		strcat(buf, "No such directory ");
-		strcat(buf, "\n");
+		sprintf(buf, "ENo such directory\n");
 		return;
-	}mftpserve
+	}
 	if(debug)
 		printf("directory confirmed\n");
 	if(access(p, F_OK) != 0 || access(p, R_OK) != 0 ||
 		access(p, X_OK) != 0){
-		strcpy(buf, "E");
-		strcat(buf, strerror(errno));
-		strcat(buf, "\n");
+		sprintf(buf, "E%s\n", strerror(errno));
 		return;
 	}
 	if(debug)
 		printf("access is checked\n");
 	if(chdir(p) != 0){
-		strcpy(buf, "E");
-		strcat(buf, strerror(errno));
-		strcat(buf, "\n");
+		sprintf(buf, "E%s\n", strerror(errno));
 		return;
 	}
 	if(debug)
@@ -164,7 +223,6 @@ void client(int cid, struct sockaddr_in cAddr, int ctrlfd, int debug) {
 	char buffer[BUF_SIZE], cmd, path[BUF_SIZE];
 	char sendMessage[BUF_SIZE];
 	struct sockaddr_in dataAddr, clientDataAddr;
-	struct sockaddr dataAd;
 	int plen;
 	int datalistenfd, datafd;
 	if((hostname = getHost(&cAddr, cid)) == NULL) {
@@ -172,8 +230,9 @@ void client(int cid, struct sockaddr_in cAddr, int ctrlfd, int debug) {
 		printf("Child %d: Client IP address %s\n", cid, inet_ntoa(cAddr.sin_addr));
 	}
 	printf("Child %d: Conenction accepted from host %s\n", cid, hostname);
-	do{ 
+	do{  // go through this procedure
 		plen = 0;
+		// receive command from the client
 		receieveCommand(&ctrlfd, buffer, cid);
 		cmd = buffer[0];
 		for(int i = 1; i < BUF_SIZE; i++) {
@@ -182,58 +241,68 @@ void client(int cid, struct sockaddr_in cAddr, int ctrlfd, int debug) {
 			if(path[i-1] == '\0')
 				break;
 		}
+		// switch based on the first character in the client messsage.
 		switch(cmd){
-			case 'C':
+			case 'C': // 'cd' from client
 			changecwd(path, sendMessage, debug);
 			if(debug)
 				printf("message to send to client = %s\n", sendMessage);
 			writeCommand(&ctrlfd, sendMessage, cid, debug);
 			break;
-			case 'D':
+			case 'D': // start data connection
+			// create the listener socket for the data connection
 			if(createSocket(&datalistenfd) < 0) {
-				strcpy(sendMessage, "E");
-				strcat(sendMessage, strerror(errno));
-				strcat(sendMessage, "\n");
+				sprintf(sendMessage, "E%s\n", strerror(errno));
+				writeCommand(&ctrlfd, sendMessage, cid, debug);
 				break;
 			}
-			
+			// set up the address of the data connection
 			setDataAddr(&dataAddr, &datalistenfd, sendMessage);
-			if(sendMessage[0] == 'E'){
-				close(datalistenfd);
+			socklen_t l = sizeof(clientDataAddr);
+			memset(&clientDataAddr, 0, sizeof(clientDataAddr));
+			if(getsockname(datalistenfd, (struct sockaddr *) &clientDataAddr, &l) < 0) {
+				sprintf(sendMessage, "E%s\n", strerror(errno));
 				writeCommand(&ctrlfd, sendMessage, cid, debug);
 				break;
 			}
-			memset(&dataAd, 0, sizeof(dataAd));
-			socklen_t addrlen = sizeof(dataAd);
-			if(getsockaddr(datalistenfd, (struct sockaddr *) &dataAddr), &addrlen) < 0) {
-				strcpy(sendMessage, "E");
-				strcat(sendMessage, strerror(errno));
-				strcat(sendMessage, "\n");
-				close(datalistenfd);
-				writeCommand(&ctrlfd, sendMessage, cid, debug);
-				break;
+			int port = ntohs(clientDataAddr.sin_port);
+			if(debug){
+				printf("Child %d: port number to send to client --> %d\n", cid, port);
 			}
-			strcpy(sendMessage, "A");
-			strcat(sendMessage, ntohs(dataAd.sin_port));
-			strmftpservecat(sendMessage, "\n");
+			// send positive awknowledgement with the port number to the client
+			sprintf(sendMessage, "A%d\n", port);
 			writeCommand(&ctrlfd, sendMessage, cid, debug);
+			// listen for the data connection.
 			listen(datalistenfd, 1);
 			if(debug)
 				printf("Listening for the client to connect\n");
-			datafd = accept(datalistenfd, (struct sockaddr *) &clientDataAddr, &sizeof(clientDataAddr));
+			// accept the connection
+			socklen_t daddrl = sizeof(dataAddr);
+			datafd = accept(datalistenfd, (struct sockaddr *) &clientDataAddr, &daddrl);
 			break;
-			case 'L':
-			listDirectory(*datafd, sendMessage, debug)
-
-			case 'Q':
+			case 'L': // 'rls' command from client
+			writeCommand(&ctrlfd, sendMessage, cid, debug);
+			listDirectory(&datafd, sendMessage, debug);	
+			close(datafd);
+			close(datalistenfd);
+			break;
+			case 'G': // 'show/get' command from client
+			writeCommand(&ctrlfd, sendMessage, cid, debug);
+			retrieveFile(&datafd, path, sendMessage, debug);
+			writeCommand(&ctrlfd, sendMessage, cid, debug);
+			close(datafd);
+			close(datalistenfd);
+			break;
+			case 'Q': // 'exit' command from client
 			if(debug)
 				printf("Child %d: Quitting\n", cid);
 			writeCommand(&ctrlfd, "A\n", cid, debug);
 			break;
 			default:
+			writeCommand(&ctrlfd, "EUnable to process request\n", cid, debug);
 			break;
 		}
-	}while(cmd != 'Q');
+	}while(cmd != 'Q'); // if 'Q' is received, end this do-while loop.
 	if(debug)
 		printf("Child %d: exiting normally\n", cid);
 }
