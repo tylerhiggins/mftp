@@ -38,6 +38,25 @@ void connectToServer(char *hname, int *sfd, struct sockaddr_in *sAddr) {
 		exit(1);
 	}
 }
+
+int makeDataConnection(char *hname, int *datafd, struct sockaddr_in *dAddr, char *port) {
+	struct hostent *hostEntry;
+	struct in_addr **pptr;
+	memset(dAddr, 0, sizeof(*dAddr));
+	dAddr->sin_family = htons(atoi(port));
+	if((hostEntry = gethostbyname(hname)) == NULL) {
+		herror("hostEntry");
+		return -1;
+	}
+	pptr = (struct in_addr **)hostEntry->h_addr_list;
+	memcpy(&saddr->sin_addr, *pptr, sizeof(struct in_addr));
+	if(connect(*sfd, (struct sockaddr *) dAddr, sizeof(*sAddr)) < 0) {
+		perror("connect");
+		return -1;
+	}
+	return 0;
+}
+
 /* Send specified message to the server arguments are the pointer to the
   control file descriptor and the command */
 void sendToServer(int *ctrlfd, char *cmd) {
@@ -50,13 +69,39 @@ void sendToServer(int *ctrlfd, char *cmd) {
 			break;
 	}
 }
+
+void listDirectory(int *datafd, int debug) {
+	int pid;
+	int fd[2];
+	pipe(fd);
+	rdr = fd[0]; wtr = fd[1];
+	if((pid = fork()) < 0){
+		perror("forking error");
+		return;
+	}
+	if(pid) {
+		close(rdr);
+		close(wtr);
+		waitpid(pid, NULL, 0);
+	}
+	else{
+		close(wtr);
+		close(rdr);
+		dup2(*datafd, 0);
+		close(datafd);
+		execlp("more", "more", "-20", (char *)0);
+		perror("exec more from server");
+		exit(1);
+	}
+}
+
 /* receive response from server arguments is the pointer to the control file descriptor
   the buffer, and a debug flag */
 void receiveResponse(int *ctrlfd, char *buf, int debug) {
 	if(debug)
 		printf("Awaiting server response.\n");
 	int n;
-	for(int i = 0; i < BUF_SIZE; i++) {
+	for(int i = 0; i <mftpserve BUF_SIZE; i++) {
 		if((n = read(*ctrlfd, &buf[i],1)) < 0){
 			perror("Could not receive message");
 			break;
@@ -148,16 +193,17 @@ int changecwd(char* p, int debug) {
 }
 /* commandMenu takes a pointer to the control file descriptor, this is the
    main driver function for the client commands. */
-void commandMenu(int *ctrlfd, int debug) {
+void commandMenu(int *ctrlfd, char *host, int debug) {
 	char buffer[BUF_SIZE];
 	char response[BUF_SIZE];
 	char *cmd, *path;
 	char toServer[BUF_SIZE];
 	int datafd;
+	struct sockaddr_in dataAddr;
 	do {  // go through all the below commands until "exit\n" is called.
 		path = NULL;
 		cmd = NULL;
-		printf("MFTP:~$ ");
+		printf("%s@MFTP:~$ ", host);
 		fflush(stdout);
 		fgets(buffer, BUF_SIZE, stdin);
 		// parse the users command.
@@ -201,6 +247,7 @@ void commandMenu(int *ctrlfd, int debug) {
 				printf("Changed server working directory to %s\n", path);
 			}
 		}
+		// exit case
 		else if(strcmp(buffer, "exit\n") == 0){
 			sendToServer(ctrlfd, "Q\n");
 			receiveResponse(ctrlfd, response, debug);
@@ -211,14 +258,62 @@ void commandMenu(int *ctrlfd, int debug) {
 					if(response[i] == '\0')
 						break;
 				}
+				write(1, "\n", 1);
 			}
 		}
+		// else if for all data connections
 		else if(strcmp(buffer, "rls") == 0 || strcmp(buffer, "get") == 0 ||
 				strcmp(buffer, "show") == 0 || strcmp(buffer, "put") == 0) {
+			// send the client a data connection request
 			sendToServer(ctrlfd, "D\n");
 			receiveResponse(ctrlfd, response, debug);
-
+			// if error, print out the message
+			if(response[0] != 'A') {
+				for(int i = 1; i < BUF_SIZE; i++) {
+					write(1, &response[i], 1);
+					if(response[i] == '\0')
+						break;
+				}
+				write(1, "\n", 1);
+			}
+			// else everything succeeded and we received a port.
+			else {
+				char port[10];
+				// get the port separated from the message.
+				for(int i = 1; i < BUF_SIZE; i++){
+					port[i-1] = message[i]
+					if(port[i-1] == '\n') {
+						port[i - 1] = '\0';
+						break;
+					}
+				}
+				// create the socket, if unsuccessful then do nothing.
+				if(createSocket(&datafd) < 0){}
+				else {
+					// make the data connection, if unsuccessful do nothing.
+					if(makeDataConnection(host, &datafd, &dataAddr, port) < 0){}
+					else { // switch statement based on first character of command.
+						switch(cmd[0]){
+							case 'r':
+							sendToServer(ctrlfd, "L\n");
+							listDirectory(*datafd, debug);
+							break;
+							case 's':
+							break;
+							case 'g':
+							break;
+							case 'p':
+							break;
+							default
+							break;
+						}
+						// close the data connection.
+						close(datafd);
+					}
+				}
+			}			
 		}
+		// unknown command response.
 		else {
 			printf("Unknown command '%s' - ignored\n", cmd);
 		}
@@ -266,7 +361,7 @@ int main(int argc, char *argv[]) {
 	// connect to server
 	connectToServer(host, &controlfd, &servAddr);
 	printf("Connected to server %s\n", host);
-	commandMenu(&controlfd, debug);
+	commandMenu(&controlfd, host, debug);
 	close(controlfd);
 
 	return 0;

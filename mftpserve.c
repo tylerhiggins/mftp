@@ -41,13 +41,15 @@ void setServAddr(struct sockaddr_in *sAddr, int *lfd) {
 	}
 
 }
-
-void setDataAddr(struct sockaddr_in *dAddr, int *dlfd, int port, char m[]){
-	memset(sAddr, 0, sizeof(*sAddr));
-	sAddr->sin_family = AF_INET;
-	sAddr->sin_port = 0;
-	sAddr->sin_addr.s_addr = htonl(INADDR_ANY);
-	if(bind(*lfd, (struct sockaddr *)sAddr, sizeof(*sAddr)) < 0){
+/* Creating the data connection arguments, a pointer to the data address the pointer to
+   the data connection listner and a character string to hold an error message should an
+   error occur. */
+void setDataAddr(struct sockaddr_in *dAddr, int *dlfd, char m[]){
+	memset(dAddr, 0, sizeof(*dAddr));
+	dAddr->sin_family = AF_INET;
+	dAddr->sin_port = 0;
+	dAddr->sin_addr.s_addr = htonl(INADDR_ANY);
+	if(bind(*lfd, (struct sockaddr *)dAddr, sizeof(*dAddr)) < 0){
 		strcpy(m, "E");
 		strcat(m, strerror(errno));
 		strcat(m, "\n");
@@ -67,6 +69,10 @@ char *getHost(struct sockaddr_in *cAddr, int cid) {
 		return NULL;
 	}
 	return hostEntry->h_name;
+
+}
+// TODO: fork and call ls
+void listDirectory(int *datafd, char m[], int debug){
 
 }
 /* receieve command reads from the client and places it in the buffer
@@ -112,7 +118,7 @@ void writeCommand(int *ctrlfd, char *message, int cid, int debug) {
    that will be sent to the client, and debug flag */
 void changecwd(char* p, char buf[], int debug) {
 	struct stat d;
-	if(lstat(p, &d) < 0) {
+	if(lstat(p,mftpserve &d) < 0) {
 		strcpy(buf, "E");
 		strcat(buf, strerror(errno));
 		strcat(buf, "\n");
@@ -125,7 +131,7 @@ void changecwd(char* p, char buf[], int debug) {
 		strcat(buf, "No such directory ");
 		strcat(buf, "\n");
 		return;
-	}
+	}mftpserve
 	if(debug)
 		printf("directory confirmed\n");
 	if(access(p, F_OK) != 0 || access(p, R_OK) != 0 ||
@@ -157,7 +163,8 @@ void client(int cid, struct sockaddr_in cAddr, int ctrlfd, int debug) {
 	char *hostname = NULL;
 	char buffer[BUF_SIZE], cmd, path[BUF_SIZE];
 	char sendMessage[BUF_SIZE];
-	struct sockaddr_in dataAddr;
+	struct sockaddr_in dataAddr, clientDataAddr;
+	struct sockaddr dataAd;
 	int plen;
 	int datalistenfd, datafd;
 	if((hostname = getHost(&cAddr, cid)) == NULL) {
@@ -183,16 +190,41 @@ void client(int cid, struct sockaddr_in cAddr, int ctrlfd, int debug) {
 			writeCommand(&ctrlfd, sendMessage, cid, debug);
 			break;
 			case 'D':
-			createSocket(&datafd);
-			if(datafd < 0){
+			if(createSocket(&datalistenfd) < 0) {
 				strcpy(sendMessage, "E");
-				strcpy(sendMessage, strerror(errno));
-				strcpy(sendMessage, "\n");
+				strcat(sendMessage, strerror(errno));
+				strcat(sendMessage, "\n");
+				break;
+			}
+			
+			setDataAddr(&dataAddr, &datalistenfd, sendMessage);
+			if(sendMessage[0] == 'E'){
+				close(datalistenfd);
 				writeCommand(&ctrlfd, sendMessage, cid, debug);
 				break;
 			}
-			setDataAddr(&dataAddr, &datalistenfd, sendMessage);
+			memset(&dataAd, 0, sizeof(dataAd));
+			socklen_t addrlen = sizeof(dataAd);
+			if(getsockaddr(datalistenfd, (struct sockaddr *) &dataAddr), &addrlen) < 0) {
+				strcpy(sendMessage, "E");
+				strcat(sendMessage, strerror(errno));
+				strcat(sendMessage, "\n");
+				close(datalistenfd);
+				writeCommand(&ctrlfd, sendMessage, cid, debug);
+				break;
+			}
+			strcpy(sendMessage, "A");
+			strcat(sendMessage, ntohs(dataAd.sin_port));
+			strmftpservecat(sendMessage, "\n");
+			writeCommand(&ctrlfd, sendMessage, cid, debug);
+			listen(datalistenfd, 1);
+			if(debug)
+				printf("Listening for the client to connect\n");
+			datafd = accept(datalistenfd, (struct sockaddr *) &clientDataAddr, &sizeof(clientDataAddr));
 			break;
+			case 'L':
+			listDirectory(*datafd, sendMessage, debug)
+
 			case 'Q':
 			if(debug)
 				printf("Child %d: Quitting\n", cid);
@@ -217,7 +249,9 @@ int main(int argc, char *argv[]) {
 	if(debug)
 		printf("Parent: debug mode enabled\n");
 	int listenfd;
-	createSocket(&listenfd);
+	if(createSocket(&listenfd) < 0) {
+		exit(1);
+	}
 	if(debug)
 		printf("Parent: socket created with descriptor %d\n", listenfd);
 	struct sockaddr_in servAddr;
