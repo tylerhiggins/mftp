@@ -102,7 +102,7 @@ void execls(int debug) {
 			dup2(rdr, 0);
 			close(wtr);
 			close(rdr);
-			execlp("more", "more", (char *)0);
+			execlp("more", "more", "-20", (char *)0);
 			perror("could not exec more locally");
 			exit(1);
 		}
@@ -119,6 +119,12 @@ void execls(int debug) {
 }
 /* changecwd looks at the directiory the user specifies to change to */
 int changecwd(char* p, int debug) {
+	for(int i = 0; i < BUF_SIZE; i++){
+		if(p[i] == '\n'){
+			p[i] = '\0';
+			break;
+		}
+	}
 	struct stat d;
 	if(lstat(p, &d) < 0) {
 		perror("lstat did not succeed");
@@ -147,6 +153,7 @@ void commandMenu(int *ctrlfd, int debug) {
 	char response[BUF_SIZE];
 	char *cmd, *path;
 	char toServer[BUF_SIZE];
+	int datafd;
 	do {  // go through all the below commands until "exit\n" is called.
 		path = NULL;
 		cmd = NULL;
@@ -205,6 +212,12 @@ void commandMenu(int *ctrlfd, int debug) {
 						break;
 				}
 			}
+		}
+		else if(strcmp(buffer, "rls") == 0 || strcmp(buffer, "get") == 0 ||
+				strcmp(buffer, "show") == 0 || strcmp(buffer, "put") == 0) {
+			sendToServer(ctrlfd, "D\n");
+			receiveResponse(ctrlfd, response, debug);
+
 		}
 		else {
 			printf("Unknown command '%s' - ignored\n", cmd);

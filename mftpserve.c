@@ -41,6 +41,19 @@ void setServAddr(struct sockaddr_in *sAddr, int *lfd) {
 	}
 
 }
+
+void setDataAddr(struct sockaddr_in *dAddr, int *dlfd, int port, char m[]){
+	memset(sAddr, 0, sizeof(*sAddr));
+	sAddr->sin_family = AF_INET;
+	sAddr->sin_port = 0;
+	sAddr->sin_addr.s_addr = htonl(INADDR_ANY);
+	if(bind(*lfd, (struct sockaddr *)sAddr, sizeof(*sAddr)) < 0){
+		strcpy(m, "E");
+		strcat(m, strerror(errno));
+		strcat(m, "\n");
+		return;
+	}
+}
 /* getHost takes the clients address information, a pointer to
    a character string, and the child pid as arguments.  This
    function attempts to retrieve a string representation of
@@ -144,7 +157,9 @@ void client(int cid, struct sockaddr_in cAddr, int ctrlfd, int debug) {
 	char *hostname = NULL;
 	char buffer[BUF_SIZE], cmd, path[BUF_SIZE];
 	char sendMessage[BUF_SIZE];
+	struct sockaddr_in dataAddr;
 	int plen;
+	int datalistenfd, datafd;
 	if((hostname = getHost(&cAddr, cid)) == NULL) {
 		hostname = inet_ntoa(cAddr.sin_addr);
 		printf("Child %d: Client IP address %s\n", cid, inet_ntoa(cAddr.sin_addr));
@@ -166,6 +181,17 @@ void client(int cid, struct sockaddr_in cAddr, int ctrlfd, int debug) {
 			if(debug)
 				printf("message to send to client = %s\n", sendMessage);
 			writeCommand(&ctrlfd, sendMessage, cid, debug);
+			break;
+			case 'D':
+			createSocket(&datafd);
+			if(datafd < 0){
+				strcpy(sendMessage, "E");
+				strcpy(sendMessage, strerror(errno));
+				strcpy(sendMessage, "\n");
+				writeCommand(&ctrlfd, sendMessage, cid, debug);
+				break;
+			}
+			setDataAddr(&dataAddr, &datalistenfd, sendMessage);
 			break;
 			case 'Q':
 			if(debug)
