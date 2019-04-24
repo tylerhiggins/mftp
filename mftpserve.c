@@ -15,6 +15,7 @@ mftpserve.c
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include "mftp.h"
 
 #define BACKLOG 4
@@ -33,10 +34,9 @@ void setServAddr(struct sockaddr_in *sAddr, int *lfd) {
 	memset(sAddr, 0, sizeof(*sAddr));
 	sAddr->sin_family = AF_INET;
 	sAddr->sin_port = htons(PORT_NUM);
-	printf("Port number = %d\n", PORT_NUM);
 	sAddr->sin_addr.s_addr = htonl(INADDR_ANY);
 	if(bind(*lfd, (struct sockaddr *)sAddr, sizeof(*sAddr)) < 0){
-		fprintf(stderr, "Parent: fatel error binding socket to port 49999 -> %s", strerror(errno));
+		fprintf(stderr, "Parent: fatel error binding socket to port 49999 -> %s\n", strerror(errno));
 		exit(1);
 	}
 
@@ -45,17 +45,15 @@ void setServAddr(struct sockaddr_in *sAddr, int *lfd) {
    a character string, and the child pid as arguments.  This
    function attempts to retrieve a string representation of
    the client that is connected to the server. */
-int getHost(struct sockaddr_in *cAddr, char **n, int cid) {
+char *getHost(struct sockaddr_in *cAddr, int cid) {
 	struct hostent *hostEntry;
-	char *hname = *n;
 	if((hostEntry = gethostbyaddr(&cAddr->sin_addr, sizeof(struct in_addr),
 		AF_INET)) == NULL) {
 		printf("Child %d: Translation of client hostname failed -> %s\n", cid, 
 			strerror(errno));
-		return -1;
+		return NULL;
 	}
-	hname = hostEntry->h_name;
-	return 0;
+	return hostEntry->h_name;
 
 }
 /* receieve command reads from the client and places it in the buffer
@@ -70,8 +68,10 @@ void receieveCommand(int *ctrlfd, char buf[], int cid) {
 			break;
 		}
 		nread += n;
-		if(buf[i] == '\0')
+		if(buf[i] == '\n') {
+			buf[i] = '\0';
 			break;
+		}
 	}
 
 }
@@ -79,25 +79,73 @@ void receieveCommand(int *ctrlfd, char buf[], int cid) {
    the awknowledgment or error message, the child id, and the debug flag */
 void writeCommand(int *ctrlfd, char *message, int cid, int debug) {
 	int i = 0;
-	if(debug)
+	if(debug && message[i] == 'A')
 		printf("Child %d: sending positive awknowledgment\n", cid);
+	else if(debug && message[i] == 'E')
+		printf("Child %d: sending negative 'E' awknowledgement\n", cid);
 	for(i = 0; i < BUF_SIZE; i++) {
 		if(write(*ctrlfd, &message[i], 1) < 0) {
 			fprintf(stderr, "Child %d: could not send message -> %s\n", cid, strerror(errno));
 			break;
 		}
-		if(message[i] == '\0')
+		if(message[i] == '\n')
 			break;
 	}
 
 }
+/* changecwd evalusates whether or not the directory can be read
+   and executed by the user then changes the directory, arguemnts
+   are the pointer to the pathname string, buffer to store the message
+   that will be sent to the client, and debug flag */
+void changecwd(char* p, char buf[], int debug) {
+	struct stat d;
+	if(lstat(p, &d) < 0) {
+		strcpy(buf, "E");
+		strcat(buf, strerror(errno));
+		strcat(buf, "\n");
+		return;
+	}
+	if(debug)
+		printf("passed lstat\n");
+	if(!S_ISDIR(d.st_mode)){
+		strcpy(buf, "E");
+		strcat(buf, "No such directory ");
+		strcat(buf, "\n");
+		return;
+	}
+	if(debug)
+		printf("directory confirmed\n");
+	if(access(p, F_OK) != 0 || access(p, R_OK) != 0 ||
+		access(p, X_OK) != 0){
+		strcpy(buf, "E");
+		strcat(buf, strerror(errno));
+		strcat(buf, "\n");
+		return;
+	}
+	if(debug)
+		printf("access is checked\n");
+	if(chdir(p) != 0){
+		strcpy(buf, "E");
+		strcat(buf, strerror(errno));
+		strcat(buf, "\n");
+		return;
+	}
+	if(debug)
+		printf("successfully changed the current working directory\n");
+	strcpy(buf, "A\n");
+	if(debug)
+		printf("path change successful sending %s\n", buf);
+
+}
+
 /* The main driver function for the client, it takes in the child id, the address
    of the client, the the control file descriptor, and debug flag as arguments*/
 void client(int cid, struct sockaddr_in cAddr, int ctrlfd, int debug) {
-	char *hostname;
+	char *hostname = NULL;
 	char buffer[BUF_SIZE], cmd, path[BUF_SIZE];
+	char sendMessage[BUF_SIZE];
 	int plen;
-	if(getHost(&cAddr, &hostname, cid) != 0) {
+	if((hostname = getHost(&cAddr, cid)) == NULL) {
 		hostname = inet_ntoa(cAddr.sin_addr);
 		printf("Child %d: Client IP address %s\n", cid, inet_ntoa(cAddr.sin_addr));
 	}
@@ -113,10 +161,16 @@ void client(int cid, struct sockaddr_in cAddr, int ctrlfd, int debug) {
 				break;
 		}
 		switch(cmd){
+			case 'C':
+			changecwd(path, sendMessage, debug);
+			if(debug)
+				printf("message to send to client = %s\n", sendMessage);
+			writeCommand(&ctrlfd, sendMessage, cid, debug);
+			break;
 			case 'Q':
 			if(debug)
 				printf("Child %d: Quitting\n", cid);
-			writeCommand(&ctrlfd, "A\0", cid, debug);
+			writeCommand(&ctrlfd, "A\n", cid, debug);
 			break;
 			default:
 			break;
@@ -125,11 +179,7 @@ void client(int cid, struct sockaddr_in cAddr, int ctrlfd, int debug) {
 	if(debug)
 		printf("Child %d: exiting normally\n", cid);
 }
-// TODO: Create Listener socket
-// TODO: Create reader/writer functions
-// TODO: fork client and server processes
-// TODO: accept connections
-// TODO: create data connection
+/* Main function */
 int main(int argc, char *argv[]) {
 	int debug = 0;
 	if(argc > 1) {
@@ -147,7 +197,7 @@ int main(int argc, char *argv[]) {
 	struct sockaddr_in servAddr;
 	setServAddr(&servAddr, &listenfd);
 	if(debug)
-		printf("Parent: socket bound to port 49999\n");
+		printf("Parent: socket bound to port %d\n", ntohs(servAddr.sin_port));
 	listen(listenfd, BACKLOG);
 	if(debug)
 		printf("Parent: listening with connection queue of %d\n", BACKLOG);
@@ -157,27 +207,34 @@ int main(int argc, char *argv[]) {
 	int pid;
 	socklen_t l = sizeof(struct sockaddr_in);
 	for(;;) {
+		// looks for zombie processes
 		waitpid(-1, NULL, WNOHANG);
+		// accept the connection
 		controlfd = accept(listenfd, (struct sockaddr *) &clientAddr, &l);
 		if(debug)
-			printf("Parent: accepted client with file descriptor of %d", controlfd);
+			printf("Parent: accepted client with file descriptor of %d\n", controlfd);
+		// fork and split the server and child nodes
 		if((pid = fork()) < 0) {
 			perror("fork error");
 			exit(1);
 		}
-		if(pid) {
+		if(pid) { // Parent process
+			// close the controlfd so it can be properly opened by another process
 			close(controlfd);
 			if(debug)
 				printf("Parent: spawned child %d and awaiting another connection.\n", pid);
 		}
-		else {
+		else {  // Child process
 			int cid = getpid();
 			if(debug)
 				printf("Child %d: started\n", cid);
+			// make a call to the driver function of the client
 			client(cid, clientAddr, controlfd, debug);
+			close(controlfd);
 		}
+		// Parent continues to loop, awaiting another connection.
 
 	}
-
+	close(listenfd);
 	return 0;
 }
