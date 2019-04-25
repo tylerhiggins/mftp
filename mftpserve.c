@@ -73,7 +73,10 @@ char *getHost(struct sockaddr_in *cAddr, int cid) {
 	return hostEntry->h_name;
 
 }
-// TODO: fork and call ls
+/* listDirectory takes a pointer to a data file descriptor, a character array
+   to store the message to the client, and a debug flag.  This function
+   pipe, forks and calls ls -l on the current server working directory.  It then
+   transfers through the data file directory to be read by the client.*/
 void listDirectory(int *datafd, char m[], int debug){
 	int pid;
 	int fd[2];
@@ -126,40 +129,11 @@ void receieveCommand(int *ctrlfd, char buf[], int cid) {
 
 }
 
-/* retrieveFile opens a file and transfers the file using the data file descriptor,
-   arguments are the pointer to the data file descriptor, the path to the file, and
-   debug flag*/
-int retrieveFile(int *datafd, char *path, char m[], int debug) {
-	char fullpath[BUF_SIZE];
-	getcwd(fullpath, BUF_SIZE);
-	strcat(fullpath, path);
-	int fd;
-	char buffer[1];
-	if(access(fullpath, R_OK) != 0) {
-		sprintf(m, "E%s\n", strerror(errno));
-		return -1;
-	}
-	if(debug){
-		printf("passed access\n");
-	}
-	if((fd = open(fullpath, O_RDONLY)) < 0) {
-		sprintf(m, "E%s\n", strerror(errno));
-		return -1;
-	}
-	if(debug)
-		printf("opened file\n");
-	while(read(fd, &buffer[0], 1) > 0){
-		write(*datafd, &buffer[0], 1);
-	}
-	if(debug){
-		printf("finished writing data\n");
-	}
-	sprintf(m, "A\n");
-	return 0;
 
-}
-/* Write to the client, arguments is the pointer to the control file descriptor, 
-   the awknowledgment or error message, the child id, and the debug flag */
+
+/* writeCommand Writes to the client using the control file descriptor 
+arguments is the pointer to the control file descriptor, the awknowledgment 
+or error message, the child id, and the debug flag */
 void writeCommand(int *ctrlfd, char *message, int cid, int debug) {
 	int i = 0;
 	if(debug && message[i] == 'A')
@@ -176,13 +150,96 @@ void writeCommand(int *ctrlfd, char *message, int cid, int debug) {
 	}
 
 }
-/* changecwd evalusates whether or not the directory can be read
+/* putfile attempts to read from the data fd and write it to a file. */
+void putFile(int *datafd, char path[], int *cfd, int cid, int debug) {
+	char fullpath[BUF_SIZE];
+	getcwd(fullpath, BUF_SIZE);
+	strcat(fullpath, "/");
+	strcat(fullpath, path);
+	char m[BUF_SIZE];
+	int fd;
+	// check to see if file exists already.
+	if(access(fullpath, F_OK) == 0) {
+		sprintf(m,"EFile %s already exists\n", path);
+		writeCommand(cfd, m, cid, debug);
+		return;
+	}
+	if((fd = open(path, O_RDWR | O_CREAT, S_IRWXU)) < 0) {
+		sprintf(m, "ECould not create file: %s\n", strerror(errno));
+		writeCommand(cfd, m, cid, debug);
+		return;
+	}
+	writeCommand(cfd, "A\n", cid, debug);
+	int n;
+	int SIZE = 512;
+	char buffer[SIZE];
+	while((n=read(*datafd, buffer, SIZE)) > 0) {
+		write(fd, buffer, n);
+	}
+	close(fd);
+	printf("Successfully transferred %s from client to %s\n", path, fullpath);
+
+}
+/* retrieveFile opens a file and transfers the file to the client using the data file descriptor,
+   arguments are the pointer to the data file descriptor, the path to the file, and
+   debug flag*/
+int retrieveFile(int *datafd, char path[], int *cfd, int cid, int debug) {
+	char fullpath[BUF_SIZE];
+	getcwd(fullpath, BUF_SIZE);
+	strcat(fullpath, "/");
+	strcat(fullpath, path);
+	char m[BUF_SIZE];
+
+	if(debug)
+		printf("fullpath is %s\n", fullpath);
+	int fd;
+	int SIZE = 512;
+	char buffer[SIZE];
+	if(access(fullpath, R_OK) != 0) {
+		sprintf(m, "E%s\n", strerror(errno));
+		writeCommand(cfd, m, cid, debug);
+		return -1;
+	}
+	if(debug){
+		printf("passed access\n");
+	}
+	if((fd = open(fullpath, O_RDONLY)) < 0) {
+		sprintf(m, "E%s\n", strerror(errno));
+		writeCommand(cfd, m, cid, debug);
+		return -1;
+	}
+	if(debug)
+		printf("opened file\n");
+	int n;
+	while((n=read(fd, buffer, SIZE)) > 0){
+		write(*datafd, buffer, n);
+	}
+	if(n < 0){
+		sprintf(m, "E%s\n", strerror(errno));
+		writeCommand(cfd, m, cid, debug);
+		return -1;
+	}
+
+	close(fd);
+	writeCommand(cfd, "A\n", cid, debug);
+	if(debug){
+		printf("finished writing data\n");
+	}
+	return 0;
+
+}
+
+/* changecwd evaluates whether or not the directory can be read
    and executed by the user then changes the directory, arguemnts
    are the pointer to the pathname string, buffer to store the message
    that will be sent to the client, and debug flag */
 void changecwd(char* p, char buf[], int debug) {
+	char change[BUF_SIZE];
+	getcwd(change, BUF_SIZE);
+	strcat(change, "/");
+	strcat(change, p);
 	struct stat d;
-	if(lstat(p, &d) < 0) {
+	if(lstat(change, &d) < 0) {
 		sprintf(buf, "E%s\n", strerror(errno));
 		// strcpy(buf, "E");
 		// strcat(buf, strerror(errno));
@@ -204,7 +261,7 @@ void changecwd(char* p, char buf[], int debug) {
 	}
 	if(debug)
 		printf("access is checked\n");
-	if(chdir(p) != 0){
+	if(chdir(change) != 0){
 		sprintf(buf, "E%s\n", strerror(errno));
 		return;
 	}
@@ -234,12 +291,16 @@ void client(int cid, struct sockaddr_in cAddr, int ctrlfd, int debug) {
 		plen = 0;
 		// receive command from the client
 		receieveCommand(&ctrlfd, buffer, cid);
+		if(debug)
+			printf("command received from client: %s\n", buffer);
 		cmd = buffer[0];
 		for(int i = 1; i < BUF_SIZE; i++) {
 			path[i-1] = buffer[i];
 			plen++;
-			if(path[i-1] == '\0')
+			if(path[i-1] == '\n') {
+				path[i-1] = '\0';
 				break;
+			}
 		}
 		// switch based on the first character in the client messsage.
 		switch(cmd){
@@ -265,6 +326,7 @@ void client(int cid, struct sockaddr_in cAddr, int ctrlfd, int debug) {
 				writeCommand(&ctrlfd, sendMessage, cid, debug);
 				break;
 			}
+			// prepare to send the port to the client.
 			int port = ntohs(clientDataAddr.sin_port);
 			if(debug){
 				printf("Child %d: port number to send to client --> %d\n", cid, port);
@@ -287,9 +349,12 @@ void client(int cid, struct sockaddr_in cAddr, int ctrlfd, int debug) {
 			close(datalistenfd);
 			break;
 			case 'G': // 'show/get' command from client
-			writeCommand(&ctrlfd, sendMessage, cid, debug);
-			retrieveFile(&datafd, path, sendMessage, debug);
-			writeCommand(&ctrlfd, sendMessage, cid, debug);
+			retrieveFile(&datafd, path, &ctrlfd, cid, debug);
+			close(datafd);
+			close(datalistenfd);
+			break;
+			case 'P':// 'put' command from client
+			putFile(&datafd, path, &ctrlfd, cid, debug);
 			close(datafd);
 			close(datalistenfd);
 			break;
@@ -297,6 +362,7 @@ void client(int cid, struct sockaddr_in cAddr, int ctrlfd, int debug) {
 			if(debug)
 				printf("Child %d: Quitting\n", cid);
 			writeCommand(&ctrlfd, "A\n", cid, debug);
+			printf("Child %d\n has exited\n", cid);
 			break;
 			default:
 			writeCommand(&ctrlfd, "EUnable to process request\n", cid, debug);

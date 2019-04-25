@@ -170,6 +170,73 @@ void execls(int debug) {
 	}
 
 }
+/* putFile reads a file from the specified path and places it
+  on the server.  Arguments are a pointer to the data file desc.
+  pathname, and debug flag */
+void putFile(int *datafd, char path[], int debug) {
+	char fullpath[BUF_SIZE];
+	getcwd(fullpath, BUF_SIZE);
+	strcat(fullpath, "/");
+	for(int i = 0; i < BUF_SIZE; i++){
+		if(path[i] == '\n'){
+			path[i] = '\0';
+			break;
+		}
+	}
+	strcat(fullpath, path);
+	if(debug)
+		printf("fullpath = %s\n", fullpath);
+	int fd;
+	if(access(fullpath, R_OK) != 0){
+		perror("Access error");
+		return;
+	}
+	if((fd=open(path, O_RDONLY)) < 0){
+		perror("Couldn't open file");
+		return;
+	}
+	int n;
+	int SIZE = 512;
+	char buffer[SIZE];
+	while((n = read(fd, buffer, SIZE)) > 0){
+		write(*datafd, buffer, n);
+	}
+	close(fd);
+	printf("Transferred %s to server\n", path);
+}
+/* receiveFile creates a file and writes to the opened file. 
+   Arguments is a pointer to the data file desc., char array
+   for the path and debug flag.*/
+void receiveFile(int *datafd, char path[], int debug) {
+	int fd;
+	char fullpath[BUF_SIZE];
+	getcwd(fullpath, BUF_SIZE);
+	strcat(fullpath, "/");
+	for(int i = 0; i < BUF_SIZE; i++) {
+		if(path[i] == '\n'){
+			path[i] = '\0';
+			break;
+		}
+	}
+	strcat(fullpath, path);
+	if(access(fullpath, F_OK) == 0) {
+		fprintf(stderr, "File %s already exists\n", path);
+		return;
+	}
+	if((fd = open(path, O_RDWR | O_CREAT, S_IRWXU)) < 0) {
+		perror("Could not create file");
+		return;
+	}
+	int SIZE = 512;
+	char buff[SIZE];
+	int n;
+	while((n=read(*datafd, buff, SIZE)) > 0){
+		if(debug)
+			printf("read %d bytes\n", n);
+		write(fd, buff, n);
+	}
+	close(fd);
+}
 /* changecwd looks at the directiory the user specifies to change to */
 int changecwd(char* p, int debug) {
 	for(int i = 0; i < BUF_SIZE; i++){
@@ -205,12 +272,11 @@ void commandMenu(int *ctrlfd, char *host, int debug) {
 	char buffer[BUF_SIZE];
 	char response[BUF_SIZE];
 	char *cmd, *path;
+	char pathfile[BUF_SIZE];
 	char toServer[BUF_SIZE];
 	int datafd;
 	struct sockaddr_in dataAddr;
 	do {  // go through all the below commands until "exit\n" is called.
-		path = NULL;
-		cmd = NULL;
 		printf("%s@MFTP:~$ ", host);
 		fflush(stdout);
 		fgets(buffer, BUF_SIZE, stdin);
@@ -224,6 +290,7 @@ void commandMenu(int *ctrlfd, char *host, int debug) {
 				printf("pathname = %s", path);
 				fflush(stdout);
 			}
+			strcpy(pathfile, path);
 		}
 		// local ls
 		if (strcmp(buffer, "ls\n") == 0) {
@@ -236,9 +303,8 @@ void commandMenu(int *ctrlfd, char *host, int debug) {
 		}
 		// server cd
 		else if (strcmp(buffer, "rcd") == 0) {
-			sprintf(toServer, "C%s", path);
-			// strcpy(toServer, "C");
-			// strcat(toServer, path);
+			 strcpy(toServer, "C");
+			 strcat(toServer, pathfile);
 			sendToServer(ctrlfd, toServer);
 			receiveResponse(ctrlfd, response, debug);
 			if(response[0] != 'A') {
@@ -316,47 +382,81 @@ void commandMenu(int *ctrlfd, char *host, int debug) {
 						if(debug)
 							printf("%s - made data connection\n", cmd);
 						switch(cmdc){
-							case 'r':
+							case 'r':  // 'rls' command
 							if(debug)
 								printf("in 'rls' area\n");
+							// send L to server
 							sendToServer(ctrlfd, "L\n");
+							// wait for response
 							receiveResponse(ctrlfd, response, debug);
+							// if response is positive call execMore
 							if(response[0] == 'A') {
 								execMore(&datafd, debug);
 							}
-							break;
-							case 's':
-							sendToServer(ctrlfd, "G\n");
-							receiveResponse(ctrlfd, response, debug);
-							if(response[0] == 'A') {
-								receiveResponse(ctrlfd, response, debug);
-								if(response[0] == 'A')
-									execMore(&datafd, debug);
-								else {
-									printf("Error response from server: ");
-									fflush(stdout);
-									for(int i = 1; i < BUF_SIZE; i++) {
-										write(1, &response[i], 1);
-										if(response[i] == '\0')
-											break;
-									}
-									write(1, "\n", 1);
+							else {  // else display the error message.
+								for(int i = 1; i < BUF_SIZE; i++) {
+									write(1, &response[i], 1);
+									if(response[i] == '\0')
+										break;
 								}
-							}
-							else {
-								printf("Error response from server: ");
-									fflush(stdout);
-									for(int i = 1; i < BUF_SIZE; i++) {
-										write(1, &response[i], 1);
-										if(response[i] == '\0')
-											break;
-									}
-									write(1, "\n", 1);
+								write(1, "\n", 1);
 							}
 							break;
-							case 'g':
+							case 's':  // 'show command'
+							// send Gpathfile to server
+							strcpy(toServer, "G");
+							strcat(toServer, pathfile);
+							sendToServer(ctrlfd, toServer);
+							receiveResponse(ctrlfd, response, debug);
+							// if response is positive call execMore
+							if(response[0] == 'A'){
+								execMore(&datafd, debug);
+							}
+							else{ // else show error
+								for(int i = 1; i < BUF_SIZE; i++) {
+									write(1, &response[i], 1);
+									if(response[i] == '\0')
+										break;
+								}
+								write(1, "\n", 1);
+							}
+							strcpy(toServer, "");
+							break;
+							case 'g': // 'get' command
+							strcpy(toServer, "G");
+							strcat(toServer, pathfile);
+							// Gpath
+							sendToServer(ctrlfd, toServer);
+							receiveResponse(ctrlfd, response, debug);
+							if(response[0] == 'A'){
+								receiveFile(&datafd, pathfile, debug);
+							}
+							else{
+								for(int i = 1; i < BUF_SIZE; i++) {
+									write(1, &response[i], 1);
+									if(response[i] == '\0')
+										break;
+								}
+								write(1, "\n", 1);
+							}
 							break;
 							case 'p':
+							strcpy(toServer, "P");
+							strcat(toServer, pathfile);
+							// Ppath
+							sendToServer(ctrlfd, toServer);
+							receiveResponse(ctrlfd, response, debug);
+							if(response[0] == 'A'){
+								putFile(&datafd, pathfile, debug);
+							}
+							else {
+								for(int i = 1; i < BUF_SIZE; i++) {
+									write(1, &response[i], 1);
+									if(response[i] == '\0')
+										break;
+								}
+								write(1, "\n", 1);
+							}
 							break;
 							default:
 							break;

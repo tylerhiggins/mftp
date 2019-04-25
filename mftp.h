@@ -18,7 +18,8 @@ mftp.h
 
 #define BUF_SIZE 4096
 #define PORT_NUM 49999
-
+/* createSocket creates a socket for a client/server
+   argument is a pointer to the socket file descriptor. */
 int createSocket(int *fd) {
 	if((*fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		perror("socket error");
