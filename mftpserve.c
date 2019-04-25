@@ -150,7 +150,10 @@ void writeCommand(int *ctrlfd, char *message, int cid, int debug) {
 	}
 
 }
-/* putfile attempts to read from the data fd and write it to a file. */
+/* putfile attempts to read from the data fd and write it to a file. 
+   arguments is a pointer to the data file descriptor, char array 
+   for the path, the control file descriptor, the child process id,
+   and a debug flag */
 void putFile(int *datafd, char path[], int *cfd, int cid, int debug) {
 	char fullpath[BUF_SIZE];
 	getcwd(fullpath, BUF_SIZE);
