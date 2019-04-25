@@ -216,6 +216,7 @@ int retrieveFile(int *datafd, char path[], int *cfd, int cid, int debug) {
 	if(debug)
 		printf("opened file\n");
 	int n;
+	writeCommand(cfd, "A\n", cid, debug);
 	while((n=read(fd, buffer, SIZE)) > 0){
 		write(*datafd, buffer, n);
 		if(n < 0){
@@ -232,7 +233,7 @@ int retrieveFile(int *datafd, char path[], int *cfd, int cid, int debug) {
 	}
 
 	close(fd);
-	writeCommand(cfd, "A\n", cid, debug);
+	
 	if(debug){
 		printf("finished writing data\n");
 	}
