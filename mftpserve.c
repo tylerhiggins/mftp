@@ -200,6 +200,7 @@ int retrieveFile(int *datafd, char path[], int *cfd, int cid, int debug) {
 	char buffer[SIZE];
 	if(access(fullpath, R_OK) != 0) {
 		sprintf(m, "E%s\n", strerror(errno));
+		close(*datafd);
 		writeCommand(cfd, m, cid, debug);
 		return -1;
 	}
@@ -208,6 +209,7 @@ int retrieveFile(int *datafd, char path[], int *cfd, int cid, int debug) {
 	}
 	if((fd = open(fullpath, O_RDONLY)) < 0) {
 		sprintf(m, "E%s\n", strerror(errno));
+		close(*datafd);
 		writeCommand(cfd, m, cid, debug);
 		return -1;
 	}
@@ -216,9 +218,15 @@ int retrieveFile(int *datafd, char path[], int *cfd, int cid, int debug) {
 	int n;
 	while((n=read(fd, buffer, SIZE)) > 0){
 		write(*datafd, buffer, n);
+		if(n < 0){
+			sprintf(m, "E%s\n", strerror(errno));
+			close(*datafd);
+			writeCommand(cfd, m, cid, debug);
+		}
 	}
 	if(n < 0){
 		sprintf(m, "E%s\n", strerror(errno));
+		close(*datafd);
 		writeCommand(cfd, m, cid, debug);
 		return -1;
 	}
