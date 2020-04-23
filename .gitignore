@@ -4,9 +4,4 @@
 !mftp.h
 !Makefile
 !.gitignore
-!info/
-!info/*
-info/.*
-!info/*/
-!info/*/*
 
